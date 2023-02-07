@@ -40,9 +40,12 @@ def return_post_comments(post, search):
     relevant_comments = []
     for comment in comments:
         if search in comment.body:
-            relevant_comments.append([post.id, comment.body, comment.created_utc])
-    df = pd.DataFrame(relevant_comments, columns=['post_id', 'comment_text', 'timestamp'])
+            relevant_comments.append([post.id, comment.id, comment.score, comment.body, comment.created_utc])
+    df = pd.DataFrame(relevant_comments, columns=['post_id', 'comment_id', 'score', 'comment_text', 'timestamp'])
     return df
+
+def return_post_info(post):
+    pass
 
 def main():
     posts = search_subreddit('gamecollecting', 'zelda', limit=10)
