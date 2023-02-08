@@ -44,15 +44,22 @@ def return_post_comments(post, search):
     df = pd.DataFrame(relevant_comments, columns=['post_id', 'comment_id', 'score', 'comment_text', 'timestamp'])
     return df
 
-def return_post_info(post):
-    pass
+def return_posts_info(posts):
+    data = []
+    for post in posts:
+        body = None
+        if post.is_self: # if text post
+            body = post.selftext
+        title = post.title
+        id = post.id
+        data.append([id, title, body])
+    df = pd.DataFrame(data, columns=['ID', 'title', 'body'])
+    return df
 
 def main():
-    posts = search_subreddit('gamecollecting', 'zelda', limit=10)
-    for post in posts:
-        df = return_post_comments(post, 'zelda')
-        print(df)
-        break
+    posts = search_subreddit('gamecollecting', 'zelda', limit=5)
+    df = return_posts_info(posts)
+    print(df)
 
 
 if __name__ == "__main__":
