@@ -38,16 +38,16 @@ def search_subreddit(subname, search, limit):
 
     return posts
 
-def return_post_comments(post, search):
+def return_post_comments(post, game):
     post.comments.replace_more(limit=None)
     comments = post.comments.list()
     relevant_comments = []
     for comment in comments:
-        relevant_comments.append([post.id, comment.id, comment.score, comment.body, comment.created_utc])
-    df = pd.DataFrame(relevant_comments, columns=['post_id', 'comment_id', 'score', 'comment_text', 'timestamp'])
+        relevant_comments.append([game, post.id, comment.id, comment.score, comment.body, comment.created_utc])
+    df = pd.DataFrame(relevant_comments, columns=['game', 'post_id', 'comment_id', 'score', 'comment_text', 'timestamp'])
     return df
 
-def return_posts_info(posts):
+def return_posts_info(posts, game):
     data = []
     for post in posts:
         body = None
@@ -56,8 +56,8 @@ def return_posts_info(posts):
         title = post.title
         id = post.id
         score = post.score
-        data.append([id, title, body, score])
-    df = pd.DataFrame(data, columns=['ID', 'title', 'body', 'score'])
+        data.append([game, id, title, body, score])
+    df = pd.DataFrame(data, columns=['game','ID', 'title', 'body', 'score'])
     return df
 
 def return_game_data(game):
@@ -67,11 +67,11 @@ def return_game_data(game):
     for sub in subreddits:
         print("Searching in sub: %s" % sub)
         posts = list(search_subreddit(subname=sub, search=game, limit=LIMIT))
-        post_df = return_posts_info(posts)
+        post_df = return_posts_info(posts, game)
         if posts:
             for post in posts:
                 print("Searching in post: %s" % post.title)
-                comments_df = return_post_comments(post, search=game)
+                comments_df = return_post_comments(post, game)
         else:
             comments_df = None
     return post_df, comments_df
@@ -93,8 +93,8 @@ def main():
     comments_df = pd.concat(comments_list, ignore_index=True)
     
     # do something with the dataframes, for example save them to disk
-    posts_df.to_csv('posts.csv', index=False)
-    comments_df.to_csv('comments.csv', index=False)
+    posts_df.to_csv(r'/home/akagi/Documents/Projects/retro-analytics/data/raw/posts.csv', index=False)
+    comments_df.to_csv(r'/home/akagi/Documents/Projects/retro-analytics/data/raw/comments.csv', index=False)
 
 if __name__ == "__main__":
     main()
