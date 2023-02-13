@@ -1,4 +1,5 @@
 import requests
+import multiprocessing
 import re
 import csv
 import os
@@ -7,10 +8,12 @@ import pandas as pd
 import json
 
 from datetime import datetime
+import time
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
 posts_path = os.path.join(script_dir, '../../data/raw/reddit_posts.csv')
 subreddits_path = os.path.join(script_dir, '../../data/raw/reddit_posts.csv')
+prices_path = os.path.join(script_dir, '../../data/raw/prices.csv')
 creds_path = os.path.join(script_dir, '../../data/reddit_credentials.json')
 ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
 
@@ -36,11 +39,11 @@ def search_subreddit(subname, search, limit):
     return posts
 
 def return_post_comments(post, search):
+    post.comments.replace_more(limit=None)
     comments = post.comments.list()
     relevant_comments = []
     for comment in comments:
-        if search in comment.body:
-            relevant_comments.append([post.id, comment.id, comment.score, comment.body, comment.created_utc])
+        relevant_comments.append([post.id, comment.id, comment.score, comment.body, comment.created_utc])
     df = pd.DataFrame(relevant_comments, columns=['post_id', 'comment_id', 'score', 'comment_text', 'timestamp'])
     return df
 
@@ -52,15 +55,46 @@ def return_posts_info(posts):
             body = post.selftext
         title = post.title
         id = post.id
-        data.append([id, title, body])
-    df = pd.DataFrame(data, columns=['ID', 'title', 'body'])
+        score = post.score
+        data.append([id, title, body, score])
+    df = pd.DataFrame(data, columns=['ID', 'title', 'body', 'score'])
     return df
 
-def main():
-    posts = search_subreddit('gamecollecting', 'zelda', limit=5)
-    df = return_posts_info(posts)
-    print(df)
+def return_game_data(game):
+    subreddits = ['gamecollecting','retrogaming']
+    LIMIT = 50
+    print("Searching for game: %s" % game)
+    for sub in subreddits:
+        print("Searching in sub: %s" % sub)
+        posts = list(search_subreddit(subname=sub, search=game, limit=LIMIT))
+        post_df = return_posts_info(posts)
+        if posts:
+            for post in posts:
+                print("Searching in post: %s" % post.title)
+                comments_df = return_post_comments(post, search=game)
+        else:
+            comments_df = None
+    return post_df, comments_df
 
+def main():
+    games = pd.read_csv(prices_path)['game'].unique()
+    pool = multiprocessing.Pool(processes=6)
+    results = pool.map(return_game_data, games)
+    posts_list = []
+    comments_list = []
+    for result in results:
+        # assuming each result is a tuple of posts and comments dataframes
+        posts, comments = result
+        posts_list.append(posts)
+        comments_list.append(comments)
+    
+    # create final dataframes from the lists
+    posts_df = pd.concat(posts_list, ignore_index=True)
+    comments_df = pd.concat(comments_list, ignore_index=True)
+    
+    # do something with the dataframes, for example save them to disk
+    posts_df.to_csv('posts.csv', index=False)
+    comments_df.to_csv('comments.csv', index=False)
 
 if __name__ == "__main__":
     main()
