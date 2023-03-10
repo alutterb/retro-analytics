@@ -136,3 +136,6 @@ notebooks/
 
 # security credentials
 credentials/
+
+# github repo token
+repo_credentials.txt
