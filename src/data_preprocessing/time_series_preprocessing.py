@@ -3,7 +3,7 @@ import os
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
 prices_path = os.path.join(script_dir, '../../data/raw/prices.csv')
-output_path = os.path.join(script_dir, '../../data/preprocessed/historical prices.csv')
+output_path = os.path.join(script_dir, '../../data/preprocessed/scraped_data/historical prices.csv')
 
 
 def main():

@@ -8,7 +8,7 @@ import numpy as np
 import os
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
-preprocessed_path = os.path.join(script_dir, '../../data/preprocessed/')
+preprocessed_path = os.path.join(script_dir, '../../data/preprocessed/scraped_data')
 posts_path = os.path.join(script_dir, '../../data/raw/posts.csv')
 comments_path = os.path.join(script_dir, '../../data/raw/comments.csv')
 
