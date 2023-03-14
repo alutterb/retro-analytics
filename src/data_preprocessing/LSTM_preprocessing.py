@@ -4,9 +4,11 @@ from sklearn.preprocessing import MinMaxScaler
 from math import sqrt
 import numpy as np
 import os
+import pickle
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
 historical_prices_path = os.path.join(script_dir, '../../data/preprocessed/scraped_data/historical prices.csv')
+data_output_path = os.path.join(script_dir, '../../data/preprocessed/model_input/preprocessed_input.pickle')
 
 # frame a sequence as a supervised learning problem
 def timeseries_to_supervised(data, lag=1):
@@ -58,12 +60,12 @@ def clean_timeseries(timeseries):
 # 1 = all values are unique
 # approximately 0 = all values are the same
 def check_threshold(arr, threshold):
-    if arr:
-        unique_vals = set(arr)
-        percentage = len(unique_vals) / len(arr)
-        return percentage >= threshold
-    else:
-        return None
+	if arr:
+		unique_vals = set(arr)
+		percentage = len(unique_vals) / len(arr)
+		return percentage >= threshold
+	else:
+		return None
 
 def main():
 	hist_prices_df = pd.read_csv(historical_prices_path)
@@ -79,7 +81,7 @@ def main():
 	for name, timeseries in zip(names,raw_values):
 		# if no missing values
 		if timeseries:
-			# if enough variation in data, let's try to fit an LSTM
+			# if enough variation in data, let's preprocess for an LSTM
 			if check_threshold(timeseries, 0.4):
 				# make series stationary
 				diff_vals = difference(timeseries)
@@ -87,13 +89,23 @@ def main():
 				# convert to supervised learning problem
 				supervised = timeseries_to_supervised(diff_vals)
 				supervised_values = supervised.values
-				data[name] = supervised_values
+
+				# split into test and train, then scale
+				split = int(len(supervised_values)*0.80)
+				train, test = supervised_values[:split], supervised_values[split:]
+
+				# transform the scale of the data
+				scaler, train_scaled, test_scaled = scale(train, test)
+				data[name] = (train_scaled, test_scaled)
+
 		# if values remain static, no need to preprocess for an LSTM, this will save time 
 			else:
 				data[name] = None
 		else:
 			data[name] = False
-	print(data)
+	
+	with open(data_output_path, 'wb') as f:
+		pickle.dump(data, f)
 
 if __name__ == "__main__":
 	main()
