@@ -8,9 +8,10 @@ from sklearn.preprocessing import MinMaxScaler
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import LSTM
+from keras.layers import Dropout
 from math import sqrt
 from matplotlib import pyplot
-import numpy
+import numpy as np
 import pickle
 import os
 
@@ -21,7 +22,7 @@ data_input_path = os.path.join(script_dir, '../../data/preprocessed/model_input/
 # inverse scaling for a forecasted value
 def invert_scale(scaler, X, value):
 	new_row = [x for x in X] + [value]
-	array = numpy.array(new_row)
+	array = np.array(new_row)
 	array = array.reshape(1, len(array))
 	inverted = scaler.inverse_transform(array)
 	return inverted[0, -1]
@@ -35,7 +36,12 @@ def fit_lstm(train, batch_size, nb_epoch, neurons):
 	X, y = train[:, 0:-1], train[:, -1]
 	X = X.reshape(X.shape[0], 1, X.shape[1])
 	model = Sequential()
-	model.add(LSTM(neurons, batch_input_shape=(batch_size, X.shape[1], X.shape[2]), stateful=True))
+	model.add(LSTM(neurons, return_sequences=True, input_shape=(1, X.shape[2])))
+	model.add(Dropout(0.2))
+	model.add(LSTM(neurons, return_sequences=True))
+	model.add(Dropout(0.2))
+	model.add(LSTM(neurons))
+	model.add(Dropout(0.2))
 	model.add(Dense(1))
 	model.compile(loss='mean_squared_error', optimizer='adam')
 	for i in range(nb_epoch):
@@ -61,7 +67,7 @@ def main():
 	test_scaled = data[key][2]
 	raw_values = data[key][-1]
 
-	lstm_model = fit_lstm(train_scaled, 1, 1000, 4)
+	lstm_model = fit_lstm(train_scaled, 1, 1000, 1)
 	train_reshaped = train_scaled[:, 0].reshape(len(train_scaled), 1, 1)
 	lstm_model.predict(train_reshaped, batch_size=1)
 
@@ -81,12 +87,13 @@ def main():
 
 	# report performance
 	split = len(train_scaled)+1
-	rmse = sqrt(mean_squared_error(raw_values[split:], predictions))
-	print('Test RMSE: %.3f' % rmse)
-	# line plot of observed vs predicted
-	pyplot.plot(raw_values[split:])
-	pyplot.plot(predictions)
-	pyplot.show()
+	test_values = raw_values[split:]
+	rmse_lstm = sqrt(mean_squared_error(test_values, predictions))
+	niave_prediction = [np.average(test_values)]*len(test_values)
+	rmse = sqrt(mean_squared_error(test_values, niave_prediction))
+	# compare to simply taking mean and predicting
+	print('Test LSTM RMSE: %.3f' % rmse_lstm)
+	print('Test Niave RMSE: %.3f' % rmse)
 
 if __name__ == "__main__":
 	main()
