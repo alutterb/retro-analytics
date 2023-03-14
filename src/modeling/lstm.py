@@ -55,8 +55,12 @@ def main():
 		data = pickle.load(f)
 	
 	# TEST - retrieve train scaled of one item
-	train_scaled = data[('xbox-one', 'xbox-one-x-1tb-console-project-scorpio-edition')][0]
-	test_scaled = data[('xbox-one', 'xbox-one-x-1tb-console-project-scorpio-edition')][1]
+	key = ('xbox-one', 'xbox-one-x-1tb-console-project-scorpio-edition')
+	scaler = data[key][0]
+	train_scaled = data[key][1]
+	test_scaled = data[key][2]
+	raw_values = data[key][-1]
+
 	lstm_model = fit_lstm(train_scaled, 1, 1000, 4)
 	train_reshaped = train_scaled[:, 0].reshape(len(train_scaled), 1, 1)
 	lstm_model.predict(train_reshaped, batch_size=1)
@@ -66,24 +70,21 @@ def main():
 		# make one-step forecast
 		X, y = test_scaled[i, 0:-1], test_scaled[i, -1]
 		yhat = forecast_lstm(lstm_model, 1, X)
-		'''
 		# invert scaling
 		yhat = invert_scale(scaler, X, yhat)
 		# invert differencing
 		yhat = inverse_difference(raw_values, yhat, len(test_scaled)+1-i)
-		'''
 		# store forecast
 		predictions.append(yhat)
-		#expected = raw_values[len(train) + i + 1]
-		#print('Month=%d, Predicted=%f, Expected=%f' % (i+1, yhat, expected))
+		expected = raw_values[len(train_scaled) + i + 1]
+		print('Month=%d, Predicted=%f, Expected=%f' % (i+1, yhat, expected))
 
-	print(predictions)
-	return 0
 	# report performance
-	rmse = sqrt(mean_squared_error(raw_values[-12:], predictions))
+	split = len(train_scaled)+1
+	rmse = sqrt(mean_squared_error(raw_values[split:], predictions))
 	print('Test RMSE: %.3f' % rmse)
 	# line plot of observed vs predicted
-	pyplot.plot(raw_values[-12:])
+	pyplot.plot(raw_values[split:])
 	pyplot.plot(predictions)
 	pyplot.show()
 
