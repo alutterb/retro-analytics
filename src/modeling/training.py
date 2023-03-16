@@ -9,6 +9,8 @@ import pickle
 import os
 import math
 
+from multiprocessing import Pool, cpu_count
+
 script_dir = os.path.dirname(os.path.realpath(__file__))
 data_input_path = os.path.join(script_dir, '../../data/preprocessed/model_input/preprocessed_input.pickle')
 model_output_path = os.path.join(script_dir, '../../models/LSTM/models.pickle')
@@ -51,31 +53,44 @@ def fit_lstm(train, batch_size, nb_epoch, neurons):
 	# Reset the model states
 	model.reset_states()
 
+	return model
+
+def load_data(input_path):
+    with open(input_path, 'rb') as f:
+        data = pickle.load(f)
+    return data
+
+def train_model(key_data_tuple):
+    key, data = key_data_tuple
+    print(f"Training LSTM model for {key[1]} on {key[0]}")
+
+    if data:
+        train_scaled = data[1]
+    else:
+        return key, None
+
+    lstm_model = fit_lstm(train_scaled, 1, 300, 4)
+    return key, lstm_model
+
+def train_models(data, num_processes):
+    models = {}
+    with Pool(num_processes) as p:
+        results = p.map(train_model, data.items())
+
+    for key, model in results:
+        if model is not None:
+            models[key] = model
+
+    return models
+
+def save_models(models, output_path):
+    with open(output_path, 'wb') as f:
+        pickle.dump(models, f)
+
 def main():
-	# load data object from file
-	with open(data_input_path, 'rb') as f:
-		data = pickle.load(f)
-	
-	models = {}
-	for key in data.keys():
-		print("Training LSTM model for %s on %s" % (key[1], key[0]))
-		# retrieve training data
-		# key = (console, game_name)
-		# structure: data[key] = (scaler, train_scaled, test_scaled, timeseries)
-		# if data isn't missing
-		if data[key]:
-			train_scaled = data[key][1]
-		else: # else continue to the next example
-			continue
-
-		# fit LSTM model
-		lstm_model = fit_lstm(train_scaled, 1, 300, 4)
-
-		# save to models object
-		models[key] = lstm_model
-	
-	with open(model_output_path, 'wb') as f:
-		pickle.dump(models, f)
+    data = load_data(data_input_path)
+    models = train_models(data, num_processes=1)
+    save_models(models, model_output_path)
 	
 if __name__ == "__main__":
 	main()
