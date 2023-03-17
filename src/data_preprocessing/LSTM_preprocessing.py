@@ -96,7 +96,7 @@ def main():
 
 				# transform the scale of the data
 				scaler, train_scaled, test_scaled = scale(train, test)
-				data[name] = (train_scaled, test_scaled)
+				data[name] = (scaler, train_scaled, test_scaled, timeseries)
 
 		# if values remain static, no need to preprocess for an LSTM, this will save time 
 			else:
