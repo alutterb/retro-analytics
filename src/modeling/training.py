@@ -1,9 +1,9 @@
-
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import LSTM
 from keras.layers import Dropout
 from keras.callbacks import EarlyStopping, LearningRateScheduler
+from keras.optimizers import SGD
 
 import pickle
 import os
@@ -69,19 +69,24 @@ def train_model(key_data_tuple):
     else:
         return key, None
 
-    lstm_model = fit_lstm(train_scaled, 1, 300, 4)
+    lstm_model = fit_lstm(train_scaled, 1, 100, 4)
     return key, lstm_model
 
 def train_models(data, num_processes):
     models = {}
-    with Pool(num_processes) as p:
-        results = p.map(train_model, data.items())
+    if num_processes > 1:
+        with Pool(num_processes) as p:
+            results = p.map(train_model, data.items())
+    else:
+        # Sequential execution
+        results = [train_model(item) for item in data.items()]
 
     for key, model in results:
         if model is not None:
             models[key] = model
 
     return models
+
 
 def save_models(models, output_path):
     with open(output_path, 'wb') as f:
