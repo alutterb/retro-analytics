@@ -21,15 +21,6 @@ def clean_timeseries(timeseries):
     return timeseries
 
 
-def check_threshold(arr, threshold):
-    if arr:
-        unique_vals = set(arr)
-        percentage = len(unique_vals) / len(arr)
-        return percentage >= threshold
-    else:
-        return None
-
-
 def main():
     hist_prices_df = pd.read_csv(historical_prices_path)
     hist_prices_df = hist_prices_df.drop('Unnamed: 0', axis=1)
@@ -42,12 +33,9 @@ def main():
     data = {}
     for name, timeseries in zip(names, raw_values):
         if timeseries:
-            if check_threshold(timeseries, 0.4):
-                # In the case of ARIMA, we don't need to make series stationary or scale the data.
-                # We'll store the original timeseries directly.
-                data[name] = timeseries
-            else:
-                data[name] = None
+            # In the case of ARIMA, we don't need to make series stationary or scale the data.
+            # We'll store the original timeseries directly.
+            data[name] = timeseries
         else:
             data[name] = None
 

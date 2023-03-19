@@ -48,11 +48,11 @@ def train_arima(key_data_tuple):
     else:
         return key, None
 
+# parallel processing on ARIMA model training
 def train_models(data, num_processes):
     models = {}
     with Pool(num_processes) as p:
         results = p.map(train_arima, data.items())
-
     for key, model_fit in results:
         if model_fit is not None:
             models[key] = model_fit
