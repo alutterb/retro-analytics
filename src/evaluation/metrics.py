@@ -48,16 +48,67 @@ def load_datasets():
 
     return predictions, comments, posts
 
+def reg_slopes(timeseries):
+    slopes = []
+    for game in timeseries.columns:
+        X = np.arange(timeseries.shape[0]).reshape(-1,1)
+        y = timeseries[game].values.reshape(-1,1)
+
+        reg = LinearRegression()
+        reg.fit(X,y)
+
+        slopes.append(reg.coef_[0][0])
+
+    slopes_series = pd.Series(slopes, index=timeseries.columns, name='slope')
+    return slopes_series
+
 def main():
     predictions, comments, posts = load_datasets()
 
     # multiply score by sentiment for posts and comments and group by game
-    comments['metric'] = comments.apply(lambda x : x['score'] * x['comment sentiment']['pos'], axis = 1)
-    grouped_comments = comments.groupby('game')['metric'].sum()
+    comments['comments metric'] = comments.apply(lambda x : x['score'] * x['comment sentiment']['pos'], axis = 1)
+    grouped_comments = comments.groupby('game')['comments metric'].sum()
 
     # now for posts
-    posts['metric'] = posts.apply(lambda x : x['score']*(x['title sentiment']['pos'] + x['body sentiment']['pos']), axis = 1)
-    grouped_posts = posts.groupby('game')['metric'].sum()
+    posts['posts metric'] = posts.apply(lambda x : x['score']*(x['title sentiment']['pos'] + x['body sentiment']['pos']), axis = 1)
+    grouped_posts = posts.groupby('game')['posts metric'].sum()
+
+    # and merge these dataframes together
+    grouped_df = pd.merge(grouped_comments, grouped_posts, how='inner', on='game')
+
+    # now calculate metric based on predictions
+    slope_series = reg_slopes(predictions)
+
+    # Also compare the first and last values, then sorting by the highest percent increase
+    percent_changes = (predictions.iloc[-1] - predictions.iloc[0]) / predictions.iloc[0] * 100
+    percent_changes.name = 'percent_change'
+
+    # Create a new dataframe with the aggregated data
+    aggregated_df = pd.concat([slope_series, percent_changes], axis=1).reset_index()
+    aggregated_df.columns = ['console', 'game', 'slope', 'percent_change']
+
+    # Next, merge the aggregated_df dataframe with the grouped_df dataframe
+    merged_df = grouped_df.merge(aggregated_df, on='game')
+
+    # Define the weights
+    comments_metric_weight = 0.1
+    posts_metric_weight = 0.3
+    slope_weight = 0.4
+    percentage_change_weight = 0.2
+
+    # Calculate the combined metric
+    merged_df['combined_metric'] = (
+        comments_metric_weight * merged_df['comments metric'] +
+        posts_metric_weight * merged_df['posts metric'] +
+        slope_weight * merged_df['slope'] +
+        percentage_change_weight * merged_df['percent_change']
+    )
+
+    # Sort the DataFrame based on the combined metric in descending order
+    merged_df = merged_df.sort_values(by='combined_metric', ascending=False)
+
+    # Print the top 10 games most likely to increase in value in the future
+    print(merged_df.head(10))
 
 if __name__ == "__main__":
     main()
