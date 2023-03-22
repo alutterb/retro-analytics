@@ -66,11 +66,11 @@ def main():
     predictions, comments, posts = load_datasets()
 
     # multiply score by sentiment for posts and comments and group by game
-    comments['comments metric'] = comments.apply(lambda x : x['score'] * x['comment sentiment']['pos'], axis = 1)
+    comments['comments metric'] = comments.apply(lambda x : x['score'] * (x['comment sentiment']['pos'] - x['comment sentiment']['neg']), axis = 1)
     grouped_comments = comments.groupby('game')['comments metric'].sum()
 
     # now for posts
-    posts['posts metric'] = posts.apply(lambda x : x['score']*(x['title sentiment']['pos'] + x['body sentiment']['pos']), axis = 1)
+    posts['posts metric'] = posts.apply(lambda x : x['score']*(x['title sentiment']['pos'] - x['title sentiment']['neg'] + x['body sentiment']['pos'] - x['body sentiment']['neg']), axis = 1)
     grouped_posts = posts.groupby('game')['posts metric'].sum()
 
     # and merge these dataframes together
@@ -90,11 +90,18 @@ def main():
     # Next, merge the aggregated_df dataframe with the grouped_df dataframe
     merged_df = grouped_df.merge(aggregated_df, on='game')
 
+    # Define the new column order
+    column_order = ['console', 'game', 'comments metric', 'posts metric', 'slope', 'percent_change']
+
+    # Reorganize the columns based on the new order
+    merged_df = merged_df[column_order]
+
+    ## COMBINE METRICS
     # Define the weights
     comments_metric_weight = 0.1
-    posts_metric_weight = 0.3
+    posts_metric_weight = 0.1
     slope_weight = 0.4
-    percentage_change_weight = 0.2
+    percentage_change_weight = 0.4
 
     # Calculate the combined metric
     merged_df['combined_metric'] = (
@@ -107,8 +114,15 @@ def main():
     # Sort the DataFrame based on the combined metric in descending order
     merged_df = merged_df.sort_values(by='combined_metric', ascending=False)
 
+    '''
+    CONSOLES: 
+    {'xbox-360', 'sega-genesis', 'nintendo-64', 'wii', 'playstation-3', 'sega-dreamcast', 'gamecube', 'sega-cd', 
+    'gameboy-color', 'nintendo-ds', 'super-nintendo', 'nintendo-switch', 'playstation', 'nes', 
+    'xbox', 'psp', 'playstation-4', 'gameboy', 'gameboy-advance', 'xbox-one', 'playstation-2'}
+    '''
+
     # Print the top 10 games most likely to increase in value in the future
-    print(merged_df.head(10))
+    print(merged_df[merged_df['console']=='sega-genesis'].head(10))
 
 if __name__ == "__main__":
     main()
