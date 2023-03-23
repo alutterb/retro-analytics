@@ -45,9 +45,6 @@ def main():
     
     comments_df['comment sentiment'] = comments_df['comment_text'].apply(calculate_sentiment)
 
-    posts_df = posts_df.drop("Unnamed: 0", axis=1)
-    comments_df = comments_df.drop("Unnamed: 0", axis=1)
-
     preprocessed_posts_path = os.path.join(preprocessed_path, 'preprocessed_posts.csv')
     posts_df.to_csv(preprocessed_posts_path)
     
