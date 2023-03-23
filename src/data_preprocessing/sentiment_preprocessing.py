@@ -14,7 +14,6 @@ comments_path = os.path.join(script_dir, '../../data/raw/comments.csv')
 
 
 def calculate_sentiment(text):
-    print("Calculating sentiment...")
     if type(text) == str:
         sid = SentimentIntensityAnalyzer()
         tokens = word_tokenize(text)
@@ -32,8 +31,6 @@ def calculate_sentiment(text):
 
         # use the sentiment analyzer to get the sentiment score
         score = sid.polarity_scores(processed_text)
-
-        print("Completed sentiment calcuation")
     else:
         return "Missing"
 

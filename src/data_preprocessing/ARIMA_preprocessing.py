@@ -23,8 +23,6 @@ def clean_timeseries(timeseries):
 
 def main():
     hist_prices_df = pd.read_csv(historical_prices_path)
-    hist_prices_df = hist_prices_df.drop('Unnamed: 0', axis=1)
-
     hist_prices_df['historical prices'] = hist_prices_df['historical prices'].apply(clean_timeseries)
 
     raw_values = hist_prices_df['historical prices']
