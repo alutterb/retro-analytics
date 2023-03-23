@@ -18,14 +18,12 @@ creds_path = os.path.join(script_dir, '../../data/reddit_credentials.json')
 ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
 
 def return_reddit_credentials():
-    f = open(creds_path)
-    creds = json.load(f)
-    f.close()
+    with open(creds_path) as f:
+        creds = json.load(f)
     client_id = creds['client_id']
     secret_key = creds['secret_key']
 
     return client_id, secret_key
-
 
 # searches specified subreddit with keyword search    
 def search_subreddit(subname, search, limit):
