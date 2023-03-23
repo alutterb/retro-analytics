@@ -62,14 +62,16 @@ def return_game_data(game):
     subreddits = ['gamecollecting','retrogaming']
     LIMIT = 50
     print("Searching for game: %s" % game)
+    post_df = pd.DataFrame(columns=['game', 'ID', 'title', 'body', 'score'])
+    comments_df = pd.DataFrame(columns=['game', 'post_id', 'comment_id', 'score', 'comment_text', 'timestamp'])
     for sub in subreddits:
         print("Searching in sub: %s" % sub)
         posts = list(search_subreddit(subname=sub, search=game, limit=LIMIT))
-        post_df = return_posts_info(posts, game)
+        post_df = pd.concat([post_df, return_posts_info(posts, game)], ignore_index=True)
         if posts:
             for post in posts:
                 print("Searching in post: %s" % post.title)
-                comments_df = return_post_comments(post, game)
+                comments_df = pd.concat([comments_df, return_post_comments(post, game)], ignore_index=True)
         else:
             comments_df = None
     return post_df, comments_df
