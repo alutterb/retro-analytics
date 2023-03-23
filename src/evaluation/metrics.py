@@ -22,6 +22,7 @@ import os
 from sklearn.linear_model import LinearRegression
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
+output_path = os.path.join(script_dir, '../../data/outputs/results.csv')
 predictions_path = os.path.join(script_dir, '../../data/outputs/predictions.pickle')
 comments_path = os.path.join(script_dir, '../../data/preprocessed/scraped_data/preprocessed_comments.csv')
 posts_path = os.path.join(script_dir,'../../data/preprocessed/scraped_data/preprocessed_posts.csv')
@@ -121,8 +122,8 @@ def main():
     'xbox', 'psp', 'playstation-4', 'gameboy', 'gameboy-advance', 'xbox-one', 'playstation-2'}
     '''
 
-    # Print the top 10 games most likely to increase in value in the future
-    print(merged_df[merged_df['console']=='sega-genesis'].head(10))
+    merged_df.to_csv(output_path, index=False)
+    
 
 if __name__ == "__main__":
     main()
