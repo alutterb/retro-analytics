@@ -26,6 +26,13 @@ predictions_path = os.path.join(script_dir, '../../data/outputs/predictions.pick
 comments_path = os.path.join(script_dir, '../../data/preprocessed/scraped_data/preprocessed_comments.csv')
 posts_path = os.path.join(script_dir,'../../data/preprocessed/scraped_data/preprocessed_posts.csv')
 
+## Weights for each metric
+comments_metric_weight = 0.1
+posts_metric_weight = 0.1
+slope_weight = 0.4
+percentage_change_weight = 0.4
+
+
 # use if missing sentiment
 default = {'neg' : 0, 'neu' : 0, 'pos' : 0, 'compound' : 0}
 
@@ -95,13 +102,6 @@ def main():
 
     # Reorganize the columns based on the new order
     merged_df = merged_df[column_order]
-
-    ## COMBINE METRICS
-    # Define the weights
-    comments_metric_weight = 0.1
-    posts_metric_weight = 0.1
-    slope_weight = 0.4
-    percentage_change_weight = 0.4
 
     # Calculate the combined metric
     merged_df['combined_metric'] = (
