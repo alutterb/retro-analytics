@@ -43,9 +43,6 @@ class ResultsApp(tk.Tk):
         self.update_listbox()
 
 if __name__ == "__main__":
-    # Load your data here, for example from a CSV file
-    # data = pd.read_csv('your_data.csv')
-    # In this example, I'll create a sample DataFrame
     data = pd.read_csv(r'/home/akagi/Documents/Projects/retro-analytics/data/outputs/results.csv')
 
     root = ThemedTk(theme="arc")
