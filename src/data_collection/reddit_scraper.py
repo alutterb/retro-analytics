@@ -12,7 +12,7 @@ import time
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
 posts_path = os.path.join(script_dir, '../../data/raw/reddit_posts.csv')
-subreddits_path = os.path.join(script_dir, '../../data/raw/reddit_posts.csv')
+comments_path = os.path.join(script_dir, '../../data/raw/comments.csv')
 prices_path = os.path.join(script_dir, '../../data/raw/prices.csv')
 creds_path = os.path.join(script_dir, '../../data/reddit_credentials.json')
 ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
@@ -92,9 +92,10 @@ def main():
     posts_df = pd.concat(posts_list, ignore_index=True)
     comments_df = pd.concat(comments_list, ignore_index=True)
     
-    # do something with the dataframes, for example save them to disk
-    posts_df.to_csv(r'/home/akagi/Documents/Projects/retro-analytics/data/raw/posts.csv', index=False)
-    comments_df.to_csv(r'/home/akagi/Documents/Projects/retro-analytics/data/raw/comments.csv', index=False)
+    # save dataframes
+    posts_df.to_csv(posts_path, index=False)
+    comments_df.to_csv(comments_path, index=False)
+
 
 if __name__ == "__main__":
     main()
