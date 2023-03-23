@@ -14,6 +14,7 @@ comments_path = os.path.join(script_dir, '../../data/raw/comments.csv')
 
 
 def calculate_sentiment(text):
+    print("Calculating sentiment...")
     if type(text) == str:
         sid = SentimentIntensityAnalyzer()
         tokens = word_tokenize(text)
@@ -31,6 +32,8 @@ def calculate_sentiment(text):
 
         # use the sentiment analyzer to get the sentiment score
         score = sid.polarity_scores(processed_text)
+
+        print("Completed sentiment calcuation")
     else:
         return "Missing"
 
@@ -44,9 +47,6 @@ def main():
     posts_df['body sentiment'] = posts_df['body'].apply(calculate_sentiment)
     
     comments_df['comment sentiment'] = comments_df['comment_text'].apply(calculate_sentiment)
-
-    posts_df = posts_df.drop("Unnamed: 0", axis=1)
-    comments_df = comments_df.drop("Unnamed: 0", axis=1)
 
     preprocessed_posts_path = os.path.join(preprocessed_path, 'preprocessed_posts.csv')
     posts_df.to_csv(preprocessed_posts_path)
