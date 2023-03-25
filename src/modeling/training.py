@@ -44,9 +44,9 @@ def train_arima(key_data_tuple):
             model_fit = model.fit()
             return key, model_fit
         else:
-            return key, {}
+            return key, None
     else:
-        return key, {}
+        return key, None
 
 # parallel processing on ARIMA model training
 def train_models(data, num_processes):
