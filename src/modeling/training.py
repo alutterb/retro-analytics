@@ -69,7 +69,7 @@ def save_models(models, output_path):
 
 def main():
     data = load_data(data_input_path)
-    models = train_models(data, num_processes=1)
+    models = train_models(data, num_processes=3)
     save_models(models, model_output_path)
 
 if __name__ == "__main__":

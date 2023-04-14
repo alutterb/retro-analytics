@@ -1,68 +1,78 @@
-import tkinter as tk
-from ttkthemes import ThemedTk
+import sys
 import pandas as pd
+from PyQt5.QtWidgets import QApplication, QTableView, QVBoxLayout, QWidget, QHeaderView, QComboBox, QLabel, QHBoxLayout
+from PyQt5.QtCore import Qt, QSortFilterProxyModel
+from PyQt5.QtGui import QStandardItemModel, QStandardItem
 
-class ResultsApp(tk.Tk):
-    def __init__(self, data):
+class DataDisplayApp(QWidget):
+    def __init__(self):
         super().__init__()
-        self.data = data
-        self.filtered_data = data.copy()
-        self.console_var = tk.StringVar(self)
-        self.console_var.set("All Consoles")
 
-        self.title("Game Recommendations")
-        self.geometry("800x600")
+        self.setWindowTitle("Data Display")
+        self.resize(1200, 600)
 
-        self.create_widgets()
+        layout = QVBoxLayout()
 
-    def create_widgets(self):
-        console_label = tk.Label(self, text="Console:")
-        console_label.pack(side="top")
+        data = pd.read_csv("/home/akagi/Documents/Projects/retro-analytics/data/outputs/results.csv")
+        model = self.create_model(data)
 
-        consoles = sorted(list(set(self.data["console"])))
-        consoles.insert(0, "All Consoles")
-        console_option_menu = tk.OptionMenu(self, self.console_var, *consoles, command=self.filter_by_console)
-        console_option_menu.pack(side="top")
+        self.proxy_model = QSortFilterProxyModel()
+        self.proxy_model.setSourceModel(model)
+        self.proxy_model.setFilterKeyColumn(-1)  # Filter all columns
 
-        search_label = tk.Label(self, text="Search:")
-        search_label.pack(side="top")
-        
-        self.search_entry = tk.Entry(self)
-        self.search_entry.pack(side="top")
+        table_view = QTableView()
+        table_view.setModel(self.proxy_model)
+        table_view.setSortingEnabled(True)
+        table_view.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
-        search_button = tk.Button(self, text="Search", command=self.search_game)
-        search_button.pack(side="top")
+        filter_label = QLabel("Filter by console:")
+        self.filter_box = QComboBox()
+        self.filter_box.addItem("All")
+        self.filter_box.addItems(data["console"].unique())
+        self.filter_box.currentTextChanged.connect(self.filter_changed)
 
-        self.results_listbox = tk.Listbox(self, width=150, height=20)
-        self.results_listbox.pack(side="top", fill="both", expand=True)
+        filter_layout = QHBoxLayout()
+        filter_layout.addWidget(filter_label)
+        filter_layout.addWidget(self.filter_box)
+        filter_layout.addStretch()
 
-        self.update_listbox()
+        layout.addLayout(filter_layout)
+        layout.addWidget(table_view)
+        self.setLayout(layout)
 
-    def update_listbox(self):
-        self.results_listbox.delete(0, tk.END)
-        for _, row in self.filtered_data.iterrows():
-            item = f"{row['console']} - {row['game']} - Combined metric: {row['combined_metric']:.2f}"
-            self.results_listbox.insert(tk.END, item)
+    def create_model(self, data):
+        model = QStandardItemModel()
 
-    def filter_by_console(self, console):
-        if console == "All Consoles":
-            self.filtered_data = self.data.copy()
+        model.setHorizontalHeaderLabels(
+            ["Console", "Game", "Comments Metric", "Posts Metric", "Slope", "Percent Change", "Combined Metric"]
+        )
+
+        for index, row in data.iterrows():
+            row_items = [
+                QStandardItem(row["console"]),
+                QStandardItem(row["game"]),
+                QStandardItem(),
+                QStandardItem(),
+                QStandardItem(),
+                QStandardItem(),
+                QStandardItem(),
+            ]
+
+            for i, value in enumerate(row[2:], start=2):
+                row_items[i].setData(value, Qt.DisplayRole)
+
+            model.appendRow(row_items)
+
+        return model
+
+    def filter_changed(self, text):
+        if text == "All":
+            self.proxy_model.setFilterRegExp('')
         else:
-            self.filtered_data = self.data[self.data['console'] == console]
-        self.update_listbox()
-
-    def search_game(self):
-        search_term = self.search_entry.get().lower()
-        if search_term:
-            self.filtered_data = self.data[self.data['game'].str.lower().str.contains(search_term)]
-            self.update_listbox()
-        else:
-            self.filtered_data = self.data.copy()
-            self.update_listbox()
+            self.proxy_model.setFilterFixedString(text)
 
 if __name__ == "__main__":
-    data = pd.read_csv(r'/home/akagi/Documents/Projects/retro-analytics/data/outputs/results.csv')
-
-    root = ThemedTk(theme="arc")
-    app = ResultsApp(data)
-    app.mainloop()
+    app = QApplication(sys.argv)
+    mainWin = DataDisplayApp()
+    mainWin.show()
+    sys.exit(app.exec_())
