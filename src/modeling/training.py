@@ -37,16 +37,21 @@ def train_arima(key_data_tuple):
     key, timeseries = key_data_tuple
     print(f"Training ARIMA model for {key[1]} on {key[0]}")
 
-    if timeseries:
-        best_order = find_best_order(timeseries)
-        if best_order is not None:
-            model = ARIMA(timeseries, order=best_order)
-            model_fit = model.fit()
-            return key, model_fit
+    try:
+        if timeseries:
+            best_order = find_best_order(timeseries)
+            if best_order is not None:
+                model = ARIMA(timeseries, order=best_order)
+                model_fit = model.fit()
+                return key, model_fit
+            else:
+                return key, None
         else:
             return key, None
-    else:
+    except Exception as e:
+        print(f"Error while training ARIMA model for {key[1]} on {key[0]}: {e}")
         return key, None
+
 
 # parallel processing on ARIMA model training
 def train_models(data, num_processes):
