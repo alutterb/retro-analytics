@@ -3,22 +3,28 @@
 ## DIRECTORY STRUCTURE
 ### Data Collection
 **Price Charting Scraper**
+
 Summary: Collects historical complete in box prices for games on pricecharting.com
 
 **Reddit Scraper**
+
 Summary: Collects comments and posts on several gaming subreddits
 
 ### Data Preprocessing
 **Time Series Preprocessing**
+
 Summary: Converts scraped prices data from pricecharting into a format that can be used for model preprocessing
 
 **ARIMA Preprocessing**
+
 Summary: Preprocessing raw time series data into a format suitable for ARIMA model training
 
 **LSTM Preprocessing**
+
 NOTE: Currently not implement due to processing power
 
 **Sentiment Preprocessing**
+
 Summary: Converts Reddit posts and comments into numeric values representing pos/neutral/neg sentiment
 
 ### Deployment
