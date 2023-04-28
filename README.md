@@ -23,24 +23,30 @@ Summary: Converts Reddit posts and comments into numeric values representing pos
 
 ### Deployment
 **Daily Update**
+
 Summary: Runs the pricecharting scraper to update daily historical prices and saves results. Trains models on updated data and updates new predictions.
 
 **Results App**
+
 Summary: Displays the results of model analyses
 
 ### Evaluation
 **Evaulate**
+
 Summary: Generates and saves ARIMA model forecasts
 
 **Metrics**
+
 Summary: Generates metrics to be used to rank video games
 
 
 ### Modeling
 **Training**
+
 Summary: Trains ARIMA models on preprocessed time series data
 
 ## Order of Operations
+
 1. Data is scraped from reddit with `reddit_scraper.py` and pricecharting.com with `pricecharting_scraper.py`
 2. The raw reddit data is preprocessed to generate sentiment scores for each comment and post in `sentiment_preprocessing.py` and the raw historical price values are preprocessed in `time_series_preprocessing.py` and then later transformed to be ARIMA input in `ARIMA_preprocessing.py`
 3. The ARIMA models are trained in `training.py` on the preprocessed time series data
