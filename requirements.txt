@@ -1,0 +1,12 @@
+numpy
+pandas
+scikit-learn
+nltk
+openai
+tensorflow
+Keras
+bs4
+PyQt5
+statsmodels
+
+
