@@ -8,15 +8,15 @@ data_output_path = os.path.join(script_dir, '../../data/preprocessed/model_input
 
 
 def clean_timeseries(timeseries):
-    if len(timeseries.strip()) == 0:
-        raise ValueError("Input timeseries string is empty")
-
-    if "," not in timeseries:
-        raise ValueError("Input timeseries string is not properly formatted")
-
-    timeseries = timeseries.strip()
     if 'nan' in timeseries:
         return False
+    timeseries = timeseries.strip()
+    if len(timeseries) == 0:
+        raise ValueError("Input timeseries string is empty")
+
+    if "," not in timeseries and len(timeseries) > 1:
+        raise ValueError("Input timeseries string is not properly formatted")
+
     timeseries = eval(timeseries)
     return timeseries
 

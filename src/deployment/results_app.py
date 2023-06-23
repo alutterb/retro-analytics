@@ -24,7 +24,25 @@ credentials = load_credentials(credentials_path)
 openai.api_key = credentials['api_key']
 
 def summarize_data(data):
-    prompt = f"Please summarize the following data: {json.dumps(data)}"
+    prompt = f"""
+    The data that is shared with you, delimited by triple tick marks, describes various metrics
+    related to video game prices. \ 
+    For example - the slope metric describes the slope of the regression line fit to the the
+    historical time series data. \
+    The percent increase metric describes how much the price has increased from the initial
+    price value recorded to the most recent price value. \
+    The comments and posts metrics describe the sentiment of comments/posts found on reddit
+    with the larger and more positive the metric, the more positive the content found the game
+    to be. \
+    And lastly the combined metrics is a linear combination of all metrics to give a feel
+    of how well a game is overall. \
+
+    Please summarize the following data: ```{json.dumps(data)}```
+    
+    Rules: The summary should not be more than 4 sentences. The target audience are collectors
+    looking to purchase retro games. Focus on the most important games with the most changes
+    and, if possible, provide links to more information.
+    """
 
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
