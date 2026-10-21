@@ -1,16 +1,10 @@
 import pandas as pd
-import nltk
 from nltk.corpus import stopwords
 from nltk.sentiment import SentimentIntensityAnalyzer
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
-import numpy as np
-import os
 
-script_dir = os.path.dirname(os.path.realpath(__file__))
-preprocessed_path = os.path.join(script_dir, '../../data/preprocessed/scraped_data')
-posts_path = os.path.join(script_dir, '../../data/raw/posts.csv')
-comments_path = os.path.join(script_dir, '../../data/raw/comments.csv')
+from retro_analytics import paths
 
 
 def calculate_sentiment(text):
@@ -37,20 +31,16 @@ def calculate_sentiment(text):
     return score
 
 def main():
-    posts_df = pd.read_csv(posts_path)
-    comments_df = pd.read_csv(comments_path)
+    posts_df = pd.read_csv(paths.reddit_posts())
+    comments_df = pd.read_csv(paths.reddit_comments())
 
     posts_df['title sentiment'] = posts_df['title'].apply(calculate_sentiment)
     posts_df['body sentiment'] = posts_df['body'].apply(calculate_sentiment)
     
     comments_df['comment sentiment'] = comments_df['comment_text'].apply(calculate_sentiment)
 
-    preprocessed_posts_path = os.path.join(preprocessed_path, 'preprocessed_posts.csv')
-    posts_df.to_csv(preprocessed_posts_path)
-    
-    preprocessed_comments_path = os.path.join(preprocessed_path, 'preprocessed_comments.csv')
-    comments_df.to_csv(preprocessed_comments_path)
-    
+    posts_df.to_csv(paths.preprocessed_posts())
+    comments_df.to_csv(paths.preprocessed_comments())
 
 if __name__ == "__main__":
     main()

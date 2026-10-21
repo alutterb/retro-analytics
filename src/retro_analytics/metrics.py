@@ -14,18 +14,13 @@
 ## the project will focus on increase in game price + positive sentiment to flag good purchases
 
 
+import ast
 import pickle
-import pandas as pd
+
 import numpy as np
-import os
+import pandas as pd
 
-from sklearn.linear_model import LinearRegression
-
-script_dir = os.path.dirname(os.path.realpath(__file__))
-output_path = os.path.join(script_dir, '../../data/outputs/results.csv')
-predictions_path = os.path.join(script_dir, '../../data/outputs/predictions.pickle')
-comments_path = os.path.join(script_dir, '../../data/preprocessed/scraped_data/preprocessed_comments.csv')
-posts_path = os.path.join(script_dir,'../../data/preprocessed/scraped_data/preprocessed_posts.csv')
+from retro_analytics import paths
 
 ## Weights for each metric
 comments_metric_weight = 0.1
@@ -37,42 +32,41 @@ percentage_change_weight = 0.4
 # use if missing sentiment
 default = {'neg' : 0, 'neu' : 0, 'pos' : 0, 'compound' : 0}
 
+
+def parse_sentiment(value):
+    return ast.literal_eval(value) if value != 'Missing' else default
+
+
 def load_datasets():
     # ARIMA forecasts
-    with open(predictions_path, 'rb') as f:
+    with open(paths.predictions(), 'rb') as f:
         predictions = pickle.load(f)
     predictions = pd.DataFrame(predictions)
 
     # comments sentiment
-    comments  = pd.read_csv(comments_path)
+    comments  = pd.read_csv(paths.preprocessed_comments())
     comments = comments.drop('Unnamed: 0', axis=1)
-    comments['comment sentiment'] = comments['comment sentiment'].apply(lambda x : eval(x) if x != 'Missing' else default)
+    comments['comment sentiment'] = comments['comment sentiment'].apply(parse_sentiment)
 
     # posts sentiment
-    posts = pd.read_csv(posts_path)
+    posts = pd.read_csv(paths.preprocessed_posts())
     posts = posts.drop('Unnamed: 0', axis=1)
-    posts['title sentiment'] = posts['title sentiment'].apply(lambda x : eval(x) if x != 'Missing' else default)
-    posts['body sentiment'] = posts['body sentiment'].apply(lambda x : eval(x) if x != 'Missing' else default)
+    posts['title sentiment'] = posts['title sentiment'].apply(parse_sentiment)
+    posts['body sentiment'] = posts['body sentiment'].apply(parse_sentiment)
 
     return predictions, comments, posts
 
 def reg_slopes(timeseries):
-    slopes = []
-    for game in timeseries.columns:
-        X = np.arange(timeseries.shape[0]).reshape(-1,1)
-        y = timeseries[game].values.reshape(-1,1)
+    """Least-squares slope of each column against its row position."""
+    x = np.arange(timeseries.shape[0])
+    slopes = [np.polyfit(x, timeseries[game].to_numpy(dtype=float), 1)[0] for game in timeseries.columns]
+    return pd.Series(slopes, index=timeseries.columns, name='slope')
 
-        reg = LinearRegression()
-        reg.fit(X,y)
+def rank(predictions, comments, posts):
+    """Combine forecast trend and Reddit sentiment into one score per game, best first.
 
-        slopes.append(reg.coef_[0][0])
-
-    slopes_series = pd.Series(slopes, index=timeseries.columns, name='slope')
-    return slopes_series
-
-def main():
-    predictions, comments, posts = load_datasets()
-
+    `predictions` has one column per (console, game) holding its forecast points.
+    """
     # multiply score by sentiment for posts and comments and group by game
     comments['comments metric'] = comments.apply(lambda x : x['score'] * (x['comment sentiment']['pos'] - x['comment sentiment']['neg']), axis = 1)
     grouped_comments = comments.groupby('game')['comments metric'].sum()
@@ -102,7 +96,7 @@ def main():
     column_order = ['console', 'game', 'comments metric', 'posts metric', 'slope', 'percent_change']
 
     # Reorganize the columns based on the new order
-    merged_df = merged_df[column_order]
+    merged_df = merged_df[column_order].copy()
 
     # Calculate the combined metric
     merged_df['combined_metric'] = (
@@ -122,8 +116,11 @@ def main():
     'xbox', 'psp', 'playstation-4', 'gameboy', 'gameboy-advance', 'xbox-one', 'playstation-2'}
     '''
 
-    merged_df.to_csv(output_path, index=False)
-    
+    return merged_df
+
+
+def main():
+    rank(*load_datasets()).to_csv(paths.results(), index=False)
 
 if __name__ == "__main__":
     main()

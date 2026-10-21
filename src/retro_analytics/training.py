@@ -1,18 +1,12 @@
-import os
 import pickle
 import warnings
 
-import numpy as np
-import pandas as pd
 from statsmodels.tsa.arima.model import ARIMA
 from multiprocessing import Pool
-from sklearn.metrics import mean_squared_error
 
 import itertools
 
-script_dir = os.path.dirname(os.path.realpath(__file__))
-data_input_path = os.path.join(script_dir, '../../data/preprocessed/model_input/preprocessed_input_ARIMA.pickle')
-model_output_path = os.path.join(script_dir, '../../models/ARIMA/models_ARIMA.pickle')
+from retro_analytics import paths
 
 warnings.filterwarnings("ignore")  # Ignore ARIMA warnings for better readability
 
@@ -73,9 +67,9 @@ def save_models(models, output_path):
         pickle.dump(models, f)
 
 def main():
-    data = load_data(data_input_path)
+    data = load_data(paths.arima_input())
     models = train_models(data, num_processes=3)
-    save_models(models, model_output_path)
+    save_models(models, paths.arima_models())
 
 if __name__ == "__main__":
     main()
