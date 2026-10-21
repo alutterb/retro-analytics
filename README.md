@@ -28,7 +28,8 @@ Each stage is a `ra` subcommand and reads the files the previous one wrote.
    least $20, skipping hardware and accessories. `--console`, `--top` and
    `--min-price` change that; `--game nes/legend-of-zelda` (repeatable) tracks
    exactly the games given without reading console pages. The file is plain
-   CSV, so you can also edit it by hand.
+   CSV, so you can also edit it by hand. If a console page fails, that
+   console's previously seeded rows are kept and the command exits non-zero.
 2. `ra scrape` (`pricecharting.py`): fetches each seeded game's page once and
    reads its full monthly CIB price history from the chart data embedded in
    the page, merging it into `data/raw/prices.csv`. `--snapshot` also records
