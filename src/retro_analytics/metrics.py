@@ -1,126 +1,70 @@
-## Combine forecasting results with sentiment analysis of each game
-## Forecasted increase in game price + positive sentiment = good pick
-### Follow up qn: which came first - the increasing game price or the positive sentiment? 
-### Did positive sentiment cause this increase in price?
+"""Rank games by forecast price growth.
 
-## Other scenarios: price increase while negative sentiment, price decrease with positve sentiment
-## price decrease and negative sentiment
-## Clearly, the last option should be ignored, but how would we interpret the two former options?
-## Perhaps price increase with negative sentiment indicates that there soon will be a price decrease
-## due to negative sentiment
-## whereas for the other option, the price may be decreasing currently; however, positive sentiment
-## may push it towards and upward trend
-## These questions require further investigation and are outside the scope of the project. For now,
-## the project will focus on increase in game price + positive sentiment to flag good purchases
+A game's score is how much its CIB price is forecast to grow over the forecast
+horizon, as a percentage of its latest price. Reddit sentiment, when it has
+been collected, only breaks ties: games whose growth matches to the displayed
+precision are ordered by sentiment, and a game with no Reddit data counts as
+neutral rather than being dropped.
+"""
 
-
-import ast
-import pickle
-
-import numpy as np
 import pandas as pd
 
 from retro_analytics import paths
 
-## Weights for each metric
-comments_metric_weight = 0.1
-posts_metric_weight = 0.1
-slope_weight = 0.4
-percentage_change_weight = 0.4
+# Growth figures closer than this (in percentage points) count as a tie.
+TIE_PRECISION = 0.1
+
+RESULT_COLUMNS = [
+    'rank', 'console', 'game', 'title', 'last_month', 'last_price',
+    'forecast_month', 'forecast_price', 'growth_pct', 'sentiment', 'sentiment_texts',
+]
 
 
-# use if missing sentiment
-default = {'neg' : 0, 'neu' : 0, 'pos' : 0, 'compound' : 0}
+def rank(series, forecasts, sentiment=None, titles=None, tie_precision=TIE_PRECISION):
+    """One row per forecast game, best first.
 
-
-def parse_sentiment(value):
-    return ast.literal_eval(value) if value != 'Missing' else default
-
-
-def load_datasets():
-    # ARIMA forecasts
-    with open(paths.predictions(), 'rb') as f:
-        predictions = pickle.load(f)
-    predictions = pd.DataFrame(predictions)
-
-    # comments sentiment
-    comments  = pd.read_csv(paths.preprocessed_comments())
-    comments = comments.drop('Unnamed: 0', axis=1)
-    comments['comment sentiment'] = comments['comment sentiment'].apply(parse_sentiment)
-
-    # posts sentiment
-    posts = pd.read_csv(paths.preprocessed_posts())
-    posts = posts.drop('Unnamed: 0', axis=1)
-    posts['title sentiment'] = posts['title sentiment'].apply(parse_sentiment)
-    posts['body sentiment'] = posts['body sentiment'].apply(parse_sentiment)
-
-    return predictions, comments, posts
-
-def reg_slopes(timeseries):
-    """Least-squares slope of each column against its row position."""
-    x = np.arange(timeseries.shape[0])
-    slopes = [np.polyfit(x, timeseries[game].to_numpy(dtype=float), 1)[0] for game in timeseries.columns]
-    return pd.Series(slopes, index=timeseries.columns, name='slope')
-
-def rank(predictions, comments, posts):
-    """Combine forecast trend and Reddit sentiment into one score per game, best first.
-
-    `predictions` has one column per (console, game) holding its forecast points.
+    `series` and `forecasts` are the long tables written by `ra prep` and
+    `ra forecast`. `sentiment` (console, game, sentiment, n_texts) and
+    `titles` (console, game, title) are optional.
     """
-    # multiply score by sentiment for posts and comments and group by game
-    comments['comments metric'] = comments.apply(lambda x : x['score'] * (x['comment sentiment']['pos'] - x['comment sentiment']['neg']), axis = 1)
-    grouped_comments = comments.groupby('game')['comments metric'].sum()
+    keys = ['console', 'game']
+    last = (series.sort_values('month').groupby(keys, as_index=False).last()
+            .rename(columns={'month': 'last_month', 'price': 'last_price'}))
+    final = (forecasts.sort_values('step').groupby(keys, as_index=False).last()
+             .rename(columns={'month': 'forecast_month', 'forecast': 'forecast_price'})
+             .drop(columns='step'))
+    ranked = final.merge(last, on=keys, how='inner')
+    ranked['growth_pct'] = (ranked['forecast_price'] / ranked['last_price'] - 1) * 100
 
-    # now for posts
-    posts['posts metric'] = posts.apply(lambda x : x['score']*(x['title sentiment']['pos'] - x['title sentiment']['neg'] + x['body sentiment']['pos'] - x['body sentiment']['neg']), axis = 1)
-    grouped_posts = posts.groupby('game')['posts metric'].sum()
+    if sentiment is not None and not sentiment.empty:
+        ranked = ranked.merge(sentiment[keys + ['sentiment', 'n_texts']], on=keys, how='left')
+    else:
+        ranked['sentiment'], ranked['n_texts'] = float('nan'), 0
+    ranked = ranked.rename(columns={'n_texts': 'sentiment_texts'})
+    ranked['sentiment_texts'] = ranked['sentiment_texts'].fillna(0).astype(int)
 
-    # and merge these dataframes together
-    grouped_df = pd.merge(grouped_comments, grouped_posts, how='inner', on='game')
+    if titles is not None and not titles.empty:
+        ranked = ranked.merge(titles[keys + ['title']].drop_duplicates(keys), on=keys, how='left')
+    else:
+        ranked['title'] = None
+    ranked['title'] = ranked['title'].fillna(ranked['game'])
 
-    # now calculate metric based on predictions
-    slope_series = reg_slopes(predictions)
-
-    # Also compare the first and last values, then sorting by the highest percent increase
-    percent_changes = (predictions.iloc[-1] - predictions.iloc[0]) / predictions.iloc[0] * 100
-    percent_changes.name = 'percent_change'
-
-    # Create a new dataframe with the aggregated data
-    aggregated_df = pd.concat([slope_series, percent_changes], axis=1).reset_index()
-    aggregated_df.columns = ['console', 'game', 'slope', 'percent_change']
-
-    # Next, merge the aggregated_df dataframe with the grouped_df dataframe
-    merged_df = grouped_df.merge(aggregated_df, on='game')
-
-    # Define the new column order
-    column_order = ['console', 'game', 'comments metric', 'posts metric', 'slope', 'percent_change']
-
-    # Reorganize the columns based on the new order
-    merged_df = merged_df[column_order].copy()
-
-    # Calculate the combined metric
-    merged_df['combined_metric'] = (
-        comments_metric_weight * merged_df['comments metric'] +
-        posts_metric_weight * merged_df['posts metric'] +
-        slope_weight * merged_df['slope'] +
-        percentage_change_weight * merged_df['percent_change']
-    )
-
-    # Sort the DataFrame based on the combined metric in descending order
-    merged_df = merged_df.sort_values(by='combined_metric', ascending=False)
-
-    '''
-    CONSOLES: 
-    {'xbox-360', 'sega-genesis', 'nintendo-64', 'wii', 'playstation-3', 'sega-dreamcast', 'gamecube', 'sega-cd', 
-    'gameboy-color', 'nintendo-ds', 'super-nintendo', 'nintendo-switch', 'playstation', 'nes', 
-    'xbox', 'psp', 'playstation-4', 'gameboy', 'gameboy-advance', 'xbox-one', 'playstation-2'}
-    '''
-
-    return merged_df
+    ranked['_growth_bucket'] = (ranked['growth_pct'] / tie_precision).round()
+    ranked['_sentiment'] = ranked['sentiment'].fillna(0.0)
+    ranked = ranked.sort_values(['_growth_bucket', '_sentiment', 'growth_pct'], ascending=False)
+    ranked['rank'] = range(1, len(ranked) + 1)
+    return ranked[RESULT_COLUMNS].reset_index(drop=True)
 
 
 def main():
-    rank(*load_datasets()).to_csv(paths.results(), index=False)
+    series = pd.read_csv(paths.require(paths.series(), "prep"))
+    forecasts = pd.read_csv(paths.require(paths.forecasts(), "forecast"))
+    sentiment = pd.read_csv(paths.sentiment()) if paths.sentiment().exists() else None
+    titles = pd.read_csv(paths.games()) if paths.games().exists() else None
+    results = rank(series, forecasts, sentiment, titles)
+    results.to_csv(paths.results(), index=False)
+    print(f"Ranked {len(results)} games into {paths.results()}")
+
 
 if __name__ == "__main__":
     main()

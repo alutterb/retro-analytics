@@ -1,18 +1,14 @@
 """Command-line entry point: ``ra <stage>``."""
 
 import argparse
+import os
 import sys
 
-from retro_analytics import forecast, metrics, pipeline, pricecharting, training
+# The models are small; BLAS threads only fight each other. Must be set before numpy loads.
+for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+    os.environ.setdefault(_var, "1")
 
-
-def sentiment(args):
-    # Reddit scraping and NLTK are an optional extra: uv sync --extra sentiment
-    from retro_analytics import reddit
-    from retro_analytics import sentiment as sentiment_prep
-
-    reddit.main()
-    sentiment_prep.main()
+from retro_analytics import PipelineError, forecast, metrics, pipeline, pricecharting, training
 
 
 def add_seed_args(parser):
@@ -30,6 +26,12 @@ def add_scrape_args(parser):
                         help="also record the price shown today, not only the monthly history")
 
 
+def add_run_args(parser):
+    add_scrape_args(parser)
+    parser.add_argument('--sentiment', action='store_true',
+                        help="also collect Reddit sentiment as a tie-breaker (needs the sentiment extra and credentials)")
+
+
 def seed(args):
     pricecharting.seed(
         consoles=args.consoles or pricecharting.CONSOLES,
@@ -43,13 +45,14 @@ COMMANDS = {
     "seed": (seed, "choose which games to track (writes games.csv)", add_seed_args),
     "scrape": (lambda args: pricecharting.main(snapshot=args.snapshot),
                "fetch CIB price history for the seeded games", add_scrape_args),
-    "sentiment": (sentiment, "search Reddit and score sentiment (needs the sentiment extra)", None),
-    "prep": (lambda args: pipeline.prep(), "turn raw prices into model input", None),
-    "train": (lambda args: training.main(), "fit an ARIMA model per game", None),
-    "forecast": (lambda args: forecast.main(), "forecast each fitted model forward", None),
-    "rank": (lambda args: metrics.main(), "combine forecasts and sentiment into results.csv", None),
-    "run": (lambda args: pipeline.run(snapshot=args.snapshot),
-            "scrape, prep, train, forecast and rank in one go", add_scrape_args),
+    "sentiment": (lambda args: pipeline.sentiment(),
+                  "optional: score Reddit sentiment per game (needs the sentiment extra)", None),
+    "prep": (lambda args: pipeline.prep(), "turn raw prices into one monthly series per game", None),
+    "train": (lambda args: training.main(), "choose a forecasting model per game", None),
+    "forecast": (lambda args: forecast.main(), "forecast each game's price six months ahead", None),
+    "rank": (lambda args: metrics.main(), "rank games by forecast price growth into results.csv", None),
+    "run": (lambda args: pipeline.run(snapshot=args.snapshot, with_sentiment=args.sentiment),
+            "scrape, prep, train, forecast and rank in one go", add_run_args),
 }
 
 
@@ -63,7 +66,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         COMMANDS[args.command][0](args)
-    except pricecharting.ScrapeError as e:
+    except (PipelineError, ImportError) as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(1)
 

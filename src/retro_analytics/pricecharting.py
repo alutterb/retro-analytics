@@ -26,7 +26,7 @@ from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from retro_analytics import paths
+from retro_analytics import PipelineError, paths
 
 BASE_URL = "https://www.pricecharting.com"
 USER_AGENT = "retro-analytics/0.2 (personal price research; +https://github.com/alutterb/retro-analytics)"
@@ -52,7 +52,7 @@ GAME_COLUMNS = ['console', 'game', 'title', 'url']
 PRICE_COLUMNS = ['console', 'game', 'price', 'date']
 
 
-class ScrapeError(Exception):
+class ScrapeError(PipelineError):
     pass
 
 
@@ -254,10 +254,7 @@ def seed(consoles=CONSOLES, top=25, min_price=20.0, games=None, session=None):
 
 
 def main(snapshot=False, session=None):
-    games_path = paths.games()
-    if not games_path.exists():
-        raise ScrapeError(f"{games_path} not found; run `ra seed` first")
-    games = pd.read_csv(games_path)
+    games = pd.read_csv(paths.require(paths.games(), "seed"))
 
     new, failures = scrape_prices(games, session or PoliteSession(), snapshot=snapshot)
     prices_path = paths.prices()

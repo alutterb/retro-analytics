@@ -1,76 +1,94 @@
-import pickle
-
-import numpy as np
 import pandas as pd
 import pytest
 
-from retro_analytics import metrics, paths
+from retro_analytics import PipelineError, metrics, paths
 
 
-def predictions_frame():
+def series_frame():
     return pd.DataFrame({
-        ("nes", "zelda"): [100.0, 102.0, 104.0, 106.0, 108.0],
-        ("snes", "chrono"): [300.0, 300.0, 300.0, 300.0, 300.0],
-        ("genesis", "sonic"): [20.0, 19.0, 18.0, 17.0, 16.0],
+        "console": ["nes", "nes", "super-nintendo", "super-nintendo", "sega-genesis", "sega-genesis", "nes", "nes"],
+        "game": ["zelda", "zelda", "chrono", "chrono", "sonic", "sonic", "metroid", "metroid"],
+        "month": ["2026-09-01", "2026-10-01"] * 4,
+        "price": [95.0, 100.0, 290.0, 300.0, 21.0, 20.0, 49.0, 50.0],
     })
 
 
-def sentiment(pos, neg):
-    return {"neg": neg, "neu": 1 - pos - neg, "pos": pos, "compound": pos - neg}
+def forecasts_frame(final):
+    rows = []
+    for (console, game), (first, last) in final.items():
+        rows += [(console, game, 1, "2026-11-01", first), (console, game, 2, "2026-12-01", last)]
+    return pd.DataFrame(rows, columns=["console", "game", "step", "month", "forecast"])
 
 
-def comments_frame():
-    return pd.DataFrame({
+FINAL = {
+    ("nes", "zelda"): (105.0, 110.0),            # +10%
+    ("super-nintendo", "chrono"): (310.0, 330.0),  # +10%
+    ("sega-genesis", "sonic"): (19.0, 18.0),       # -10%
+    ("nes", "metroid"): (52.0, 55.0),              # +10%
+}
+
+
+def test_rank_orders_by_forecast_growth_without_sentiment():
+    final = dict(FINAL)
+    final[("nes", "metroid")] = (52.0, 60.0)  # +20%
+    ranked = metrics.rank(series_frame(), forecasts_frame(final))
+    assert list(ranked.columns) == metrics.RESULT_COLUMNS
+    assert ranked["game"].tolist()[0] == "metroid"
+    assert ranked["game"].tolist()[-1] == "sonic"
+    assert ranked["rank"].tolist() == [1, 2, 3, 4]
+    metroid = ranked.iloc[0]
+    assert metroid["last_price"] == 50.0
+    assert metroid["forecast_price"] == 60.0
+    assert metroid["forecast_month"] == "2026-12-01"
+    assert metroid["growth_pct"] == pytest.approx(20.0)
+    assert ranked["sentiment"].isna().all()
+    assert (ranked["sentiment_texts"] == 0).all()
+    assert ranked["title"].tolist()[0] == "metroid"
+
+
+def test_sentiment_breaks_ties_and_missing_sentiment_is_neutral():
+    sentiment = pd.DataFrame({
+        "console": ["nes", "super-nintendo", "sega-genesis"],
         "game": ["zelda", "chrono", "sonic"],
-        "score": [10, 4, 2],
-        "comment sentiment": [sentiment(0.5, 0.0), sentiment(0.2, 0.1), sentiment(0.0, 0.5)],
+        "sentiment": [-0.4, 0.6, 0.9],
+        "n_texts": [12, 30, 4],
     })
+    ranked = metrics.rank(series_frame(), forecasts_frame(FINAL), sentiment)
+    # Three games tie at +10%: positive chrono, neutral (no data) metroid, negative zelda.
+    assert ranked["game"].tolist() == ["chrono", "metroid", "zelda", "sonic"]
+    assert ranked.set_index("game").loc["metroid", "sentiment_texts"] == 0
+    assert pd.isna(ranked.set_index("game").loc["metroid", "sentiment"])
 
 
-def posts_frame():
-    return pd.DataFrame({
-        "game": ["zelda", "chrono", "sonic"],
-        "score": [3, 1, 1],
-        "title sentiment": [sentiment(0.4, 0.0), sentiment(0.0, 0.0), sentiment(0.0, 0.2)],
-        "body sentiment": [sentiment(0.1, 0.0), metrics.default, sentiment(0.0, 0.0)],
-    })
+def test_sentiment_never_outranks_real_growth_differences():
+    final = dict(FINAL)
+    final[("nes", "zelda")] = (105.0, 110.5)  # +10.5%, beats +10% despite bad sentiment
+    sentiment = pd.DataFrame({"console": ["nes"], "game": ["zelda"], "sentiment": [-1.0], "n_texts": [5]})
+    ranked = metrics.rank(series_frame(), forecasts_frame(final), sentiment)
+    assert ranked["game"].iloc[0] == "zelda"
 
 
-def test_reg_slopes_match_linear_trend():
-    slopes = metrics.reg_slopes(predictions_frame())
-    assert slopes[("nes", "zelda")] == pytest.approx(2.0)
-    assert slopes[("snes", "chrono")] == pytest.approx(0.0)
-    assert slopes[("genesis", "sonic")] == pytest.approx(-1.0)
+def test_titles_are_used_when_known():
+    titles = pd.DataFrame({"console": ["nes"], "game": ["zelda"], "title": ["Legend of Zelda"], "url": ["x"]})
+    ranked = metrics.rank(series_frame(), forecasts_frame(FINAL), titles=titles).set_index("game")
+    assert ranked.loc["zelda", "title"] == "Legend of Zelda"
+    assert ranked.loc["chrono", "title"] == "chrono"
 
 
-def test_rank_combines_metrics_and_sorts():
-    ranked = metrics.rank(predictions_frame(), comments_frame(), posts_frame())
-
-    assert list(ranked.columns) == [
-        "console", "game", "comments metric", "posts metric", "slope", "percent_change", "combined_metric",
-    ]
-    assert list(ranked["game"]) == ["zelda", "chrono", "sonic"]
-
-    zelda = ranked.set_index("game").loc["zelda"]
-    assert zelda["comments metric"] == pytest.approx(5.0)
-    assert zelda["posts metric"] == pytest.approx(1.5)
-    assert zelda["percent_change"] == pytest.approx(8.0)
-    assert zelda["combined_metric"] == pytest.approx(0.1 * 5.0 + 0.1 * 1.5 + 0.4 * 2.0 + 0.4 * 8.0)
-    assert np.isfinite(ranked["combined_metric"]).all()
-
-
-def test_main_reads_pipeline_files_and_writes_results():
-    with open(paths.predictions(), "wb") as f:
-        pickle.dump(predictions_frame().to_dict("list"), f)
-    comments = comments_frame()
-    comments["comment sentiment"] = comments["comment sentiment"].astype(str)
-    comments.to_csv(paths.preprocessed_comments())
-    posts = posts_frame()
-    posts["title sentiment"] = posts["title sentiment"].astype(str)
-    posts["body sentiment"] = ["Missing" if s == metrics.default else str(s) for s in posts["body sentiment"]]
-    posts.to_csv(paths.preprocessed_posts())
+def test_main_works_price_only_and_picks_up_sentiment_when_present():
+    series_frame().to_csv(paths.series(), index=False)
+    forecasts_frame(FINAL).to_csv(paths.forecasts(), index=False)
 
     metrics.main()
+    assert len(pd.read_csv(paths.results())) == 4
 
-    results = pd.read_csv(paths.results())
-    assert list(results["game"]) == ["zelda", "chrono", "sonic"]
+    pd.DataFrame({"console": ["nes"], "game": ["zelda"], "sentiment": [0.9], "n_texts": [3]}).to_csv(
+        paths.sentiment(), index=False)
+    metrics.main()
+    assert pd.read_csv(paths.results())["game"].iloc[0] == "zelda"
+
+
+def test_main_without_forecasts_says_which_stage_to_run():
+    series_frame().to_csv(paths.series(), index=False)
+    with pytest.raises(PipelineError, match="run `ra forecast` first"):
+        metrics.main()

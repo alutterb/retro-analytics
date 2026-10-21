@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 import requests
 
-from retro_analytics import cli, paths, pricecharting
+from retro_analytics import PipelineError, cli, paths, pricecharting
 
 FIXTURES = Path(__file__).parent / "fixtures"
 CONSOLE_URL = "https://www.pricecharting.com/console/nes"
@@ -161,7 +161,7 @@ def test_scrape_snapshot_adds_todays_price_and_merges_without_duplicates():
 
 
 def test_scrape_without_seed_explains_what_to_do():
-    with pytest.raises(pricecharting.ScrapeError, match="run `ra seed` first"):
+    with pytest.raises(PipelineError, match="run `ra seed` first"):
         pricecharting.main(session=FakeSession({}))
 
 

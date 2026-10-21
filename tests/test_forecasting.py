@@ -1,38 +1,75 @@
-import pickle
-
 import numpy as np
+import pandas as pd
+import pytest
 
-from retro_analytics import forecast, paths, training
-
-
-def test_find_best_order_returns_valid_order(trending_series):
-    order = training.find_best_order(trending_series, max_p=1, max_d=1, max_q=1)
-    assert order is not None
-    p, d, q = order
-    assert 0 <= p <= 1 and 0 <= d <= 1 and 0 <= q <= 1
-    assert order != (0, 0, 0)
+from conftest import monthly
+from retro_analytics import forecast, paths, time_series, training
 
 
-def test_train_arima_skips_missing_series():
-    assert training.train_arima((("nes", "zelda"), None)) == (("nes", "zelda"), None)
+def test_select_model_picks_small_arima_with_trend(growing_series):
+    spec = training.select_model(growing_series)
+    assert spec["method"] == "arima"
+    assert 0 <= spec["p"] <= training.MAX_P and 0 <= spec["q"] <= training.MAX_Q
+    assert spec["d"] == 1
+    assert np.isfinite(spec["aic"])
 
 
-def test_train_forecast_round_trip(trending_series):
-    data = {("nes", "zelda"): trending_series, ("nes", "metroid"): None}
-    models = training.train_models(data, num_processes=1)
-    assert list(models) == [("nes", "zelda")]
-
-    training.save_models(models, paths.arima_models())
-    forecast.save_predictions(forecast.forecast_all(forecast.load_models(paths.arima_models())), paths.predictions())
-    with open(paths.predictions(), "rb") as f:
-        predictions = pickle.load(f)
-
-    points = np.asarray(predictions[("nes", "zelda")])
-    assert points.shape == (5,)
-    assert np.all(np.isfinite(points))
-    # Forecasts should stay in the neighbourhood of the series it was fitted on.
-    assert 40 < points.mean() < 90
+def test_forecast_of_rising_series_keeps_rising(growing_series):
+    # The old ARIMA without drift forecast a flat line for series like this.
+    spec = training.select_model(growing_series)
+    points = forecast.forecast_prices(growing_series, spec, horizon=6)
+    assert points.shape == (6,)
+    assert np.all(np.diff(points) > 0)
+    assert points[-1] > growing_series.iloc[-1] * 1.05
 
 
-def test_forecast_none_model_is_empty():
-    assert forecast.forecast((("nes", "zelda"), None)) == []
+def test_drift_fallback_extends_average_growth():
+    prices = monthly([100, 110, 121, 133.1])
+    points = forecast.forecast_prices(prices, {"method": "drift"}, horizon=2)
+    assert points == pytest.approx([146.41, 161.051])
+
+
+def test_flat_series_forecasts_flat():
+    prices = monthly([50.0] * 24)
+    points = forecast.forecast_prices(prices, {"method": "drift"}, horizon=3)
+    assert points == pytest.approx([50.0] * 3)
+
+
+def test_select_models_skips_short_and_non_positive_series(growing_series):
+    series = {
+        ("nes", "zelda"): growing_series,
+        ("nes", "short"): monthly([10.0] * 5),
+        ("nes", "free"): monthly([0.0] + [10.0] * 20),
+    }
+    specs = training.select_models(series)
+    assert specs[["console", "game"]].values.tolist() == [["nes", "zelda"]]
+    assert specs.loc[0, "n_points"] == 48
+    assert list(specs.columns) == training.SPEC_COLUMNS
+
+
+def test_select_model_falls_back_to_drift_when_no_fit_works(monkeypatch, growing_series):
+    def broken_fit(log_prices, order):
+        raise ValueError("singular")
+
+    monkeypatch.setattr(training, "fit_arima", broken_fit)
+    assert training.select_model(growing_series)["method"] == "drift"
+
+
+def test_train_forecast_round_trip_writes_csv_not_pickles(growing_series):
+    rows = pd.DataFrame({
+        "console": "nes", "game": "zelda",
+        "month": growing_series.index.strftime("%Y-%m-%d"), "price": growing_series.to_numpy(),
+    })
+    rows.to_csv(paths.series(), index=False)
+
+    training.main()
+    forecast.main()
+
+    specs = pd.read_csv(paths.model_specs())
+    forecasts = pd.read_csv(paths.forecasts())
+    assert specs["game"].tolist() == ["zelda"]
+    assert forecasts["step"].tolist() == list(range(1, forecast.HORIZON + 1))
+    assert forecasts["month"].iloc[0] == "2026-01-01"  # the month after the series ends
+    assert np.all(np.isfinite(forecasts["forecast"]))
+    assert not list(paths.data_dir().rglob("*.pickle")) and not list(paths.models_dir().rglob("*.pickle"))
+    assert set(time_series.load_series()) == {("nes", "zelda")}
