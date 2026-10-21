@@ -50,3 +50,12 @@ def test_prep_round_trip_through_files():
 def test_prep_without_prices_says_which_stage_to_run():
     with pytest.raises(PipelineError, match="run `ra scrape` first"):
         time_series.main()
+
+
+def test_prep_ignores_prices_of_games_no_longer_in_games_csv():
+    prices_frame().to_csv(paths.prices(), index=False)
+    pd.DataFrame({"console": ["nes"], "game": ["zelda"], "title": ["Zelda"], "url": ["u"]}).to_csv(
+        paths.games(), index=False)
+    time_series.main()
+    assert set(time_series.load_series()) == {("nes", "zelda")}
+    assert set(pd.read_csv(paths.prices())["game"]) == {"zelda", "chrono"}

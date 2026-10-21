@@ -46,6 +46,9 @@ def load_series():
 
 def main():
     prices = pd.read_csv(paths.require(paths.prices(), "scrape"))
+    if paths.games().exists():
+        tracked = pd.read_csv(paths.games(), usecols=['console', 'game'])
+        prices = prices.merge(tracked.drop_duplicates(), on=['console', 'game'])
     series = monthly_series(prices)
     series.to_csv(paths.series(), index=False)
     print(f"Wrote {series.groupby(['console', 'game']).ngroups} monthly series to {paths.series()}")
