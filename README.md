@@ -47,7 +47,9 @@ Each stage is a `ra` subcommand and reads the files the previous one wrote.
    access case by case, so the pipeline never depends on this stage.
 4. `ra prep` (`time_series.py`): turns `prices.csv` into one monthly series per
    game covering the last five years, filling months missing between two known
-   prices by linear interpolation.
+   prices by linear interpolation. Only games listed in `games.csv` are used,
+   so games dropped by re-seeding leave the ranking but keep their history in
+   `prices.csv`.
 5. `ra train` (`training.py`): picks a model per game with at least 12 months
    of prices: an ARIMA(p, 1, q) on log prices with p, q <= 2 chosen by AIC and
    a drift term, so a rising price keeps rising in the forecast. When no ARIMA
