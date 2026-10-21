@@ -104,6 +104,17 @@ def test_seed_from_console_pages_writes_games_and_reports_failures():
     assert session.requested == [CONSOLE_URL, "https://www.pricecharting.com/console/snes"]
 
 
+def test_seed_keeps_previous_rows_for_failed_consoles():
+    pricecharting.explicit_games(["snes/chrono-trigger", "nes/old-game"]).to_csv(paths.games(), index=False)
+    session = FakeSession({CONSOLE_URL: fixture("console_nes.html")})
+    with pytest.raises(pricecharting.ScrapeError, match="snes"):
+        pricecharting.seed(consoles=["nes", "snes"], top=2, min_price=20, session=session)
+
+    games = pd.read_csv(paths.games())
+    assert games[["console", "game"]].values.tolist() == [
+        ["nes", "legend-of-zelda"], ["nes", "super-mario-bros-3"], ["snes", "chrono-trigger"]]
+
+
 def test_seed_explicit_games_makes_no_requests():
     session = FakeSession({})
     pricecharting.seed(games=["nes/legend-of-zelda", "super-nintendo/chrono-trigger"], session=session)
