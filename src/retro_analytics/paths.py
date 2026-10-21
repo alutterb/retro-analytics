@@ -41,8 +41,8 @@ def prices() -> Path:
     return raw("prices.csv")
 
 
-def consoles() -> Path:
-    return raw("consoles.csv")
+def games() -> Path:
+    return raw("games.csv")
 
 
 def reddit_posts() -> Path:

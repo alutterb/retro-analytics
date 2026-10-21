@@ -6,10 +6,10 @@ resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
     "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'win32'",
-    "python_full_version < '3.13' and sys_platform == 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version < '3.13' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
     "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 
@@ -643,6 +643,7 @@ dependencies = [
     { name = "pandas" },
     { name = "requests" },
     { name = "statsmodels" },
+    { name = "urllib3" },
 ]
 
 [package.optional-dependencies]
@@ -665,6 +666,7 @@ requires-dist = [
     { name = "praw", marker = "extra == 'sentiment'", specifier = ">=7.8" },
     { name = "requests", specifier = ">=2.32" },
     { name = "statsmodels", specifier = ">=0.14.2" },
+    { name = "urllib3", specifier = ">=2" },
 ]
 provides-extras = ["sentiment"]
 
