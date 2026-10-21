@@ -1,0 +1,13 @@
+# Weekly price refresh, run as a systemd user service.
+# Install: see "Weekly refresh" in README.md. Edit WorkingDirectory if the
+# repository lives somewhere else.
+[Unit]
+Description=Refresh retro-analytics prices, forecasts and report
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Documents/Projects/retro-analytics
+ExecStart=%h/.local/bin/uv run --frozen ra run
+Nice=10

@@ -1,6 +1,6 @@
 """Run each pipeline stage in order, from scraping to the ranked results."""
 
-from retro_analytics import forecast, metrics, paths, pricecharting, time_series, training
+from retro_analytics import forecast, metrics, paths, pricecharting, report, time_series, training
 
 
 def prep():
@@ -19,8 +19,11 @@ def sentiment():
     sentiment_scores.main()
 
 
-def run(snapshot=False, with_sentiment=False):
+def run(snapshot=False, with_sentiment=False, games=None):
+    """Scrape, model, rank and write the report. `games` ('console/slug') re-seeds first."""
     print("executing update")
+    if games:
+        pricecharting.seed(games=games)
     scrape_error = None
     try:
         pricecharting.main(snapshot=snapshot)
@@ -35,6 +38,7 @@ def run(snapshot=False, with_sentiment=False):
     training.main()
     forecast.main()
     metrics.main()
+    report.main()
     if scrape_error:
         raise scrape_error
     print("complete")

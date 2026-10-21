@@ -1,19 +1,55 @@
 # retro-analytics
 
 Ranks retro video games by how much their complete-in-box (CIB) price on
-pricecharting.com is forecast to grow over the next six months. Reddit
-sentiment is optional and off by default; when collected, it only breaks ties.
+[PriceCharting](https://www.pricecharting.com) is forecast to grow over the
+next six months, and writes the ranking as a single HTML page you open in a
+browser. Reddit sentiment is optional and off by default; when collected, it
+only breaks ties.
+
+It is a personal tool: it runs on your machine, keeps all scraped data local,
+and is meant to refresh once a week.
 
 ## Quickstart
 
 Requires [uv](https://docs.astral.sh/uv/). Python 3.12 or newer; development uses 3.13.
 
 ```sh
-uv sync                      # core pipeline
-uv sync --extra sentiment    # also Reddit scraping and NLTK sentiment
-uv run pytest                # run the test suite
-uv run ra --help             # list pipeline stages
+uv sync                        # install the pinned dependencies
+uv run ra seed                 # pick the games to track (21 consoles, top 25 each, CIB >= $20)
+uv run ra run                  # scrape, forecast, rank and write the report
+xdg-open data/outputs/report.html
 ```
+
+The first `ra seed` reads 21 console pages and the first `ra run` reads one
+page per tracked game (about 550 pages, 1-2 s apart, so 15-20 minutes).
+`ra seed --console nes --top 10` or `ra seed --game nes/legend-of-zelda`
+tracks fewer games.
+
+### Three-game example
+
+`examples/three-games.sh` runs the whole pipeline on NES The Legend of Zelda,
+SNES Chrono Trigger and Genesis Sonic the Hedgehog (three page requests) into
+`data/example/`, separate from your main tracked set:
+
+```sh
+./examples/three-games.sh
+```
+
+It prints where `results.csv` and `report.html` were written.
+
+## Output
+
+- `data/outputs/report.html`: one self-contained page with no external files.
+  The table is sortable by clicking any column header and filterable by
+  console. Each row has the latest price, the six-month forecast, the forecast
+  growth, the sentiment score when collected, and a sparkline of the last 24
+  monthly prices (solid) followed by the forecast (dashed). Game names link to
+  their PriceCharting page.
+- `data/outputs/results.csv`: the same ranking as CSV, best first, with
+  columns `rank, console, game, title, last_month, last_price,
+  forecast_month, forecast_price, growth_pct, sentiment, sentiment_texts`.
+
+Forecasts are statistical extrapolations of past prices, not advice.
 
 Data is written under `data/` (or `$RA_DATA_DIR`) and the chosen model
 specifications under `models/` (or `$RA_MODELS_DIR`). Every hand-off between
@@ -60,12 +96,60 @@ Each stage is a `ra` subcommand and reads the files the previous one wrote.
    latest price - 1`, into `data/outputs/results.csv`. Games whose growth
    matches to 0.1 percentage points are ordered by sentiment; games without
    Reddit data count as neutral and are never dropped.
+8. `ra report` (`report.py`): writes `data/outputs/report.html` from the
+   ranking, the monthly series and the forecasts.
 
-`ra run` runs scrape, prep, train, forecast and rank in order on the games
-already seeded, price-only. `ra run --sentiment` also runs the sentiment stage
-before ranking. If some games fail to scrape it still ranks the rest, then
+`ra run` runs scrape, prep, train, forecast, rank and report in order on the
+games already seeded, price-only. `ra run --sentiment` also runs the sentiment
+stage before ranking, and `ra run --game console/slug` (repeatable) re-seeds
+exactly those games first. If some games fail to scrape it still ranks the rest, then
 exits non-zero. Any stage whose input is missing exits non-zero and names the
 stage to run first.
+
+## Weekly refresh
+
+PriceCharting's history is monthly, so a weekly run is plenty. Two options:
+
+**systemd user timer** (Linux). The units in `deploy/systemd/` run `ra run`
+every Sunday at 06:00 local time, catching up after the machine was off.
+Edit `WorkingDirectory` in the service if the repository is not at
+`~/Documents/Projects/retro-analytics`, then:
+
+```sh
+mkdir -p ~/.config/systemd/user
+cp deploy/systemd/retro-analytics.service deploy/systemd/retro-analytics.timer ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now retro-analytics.timer
+systemctl --user list-timers retro-analytics.timer   # next run
+journalctl --user -u retro-analytics.service          # last run's output
+```
+
+To keep it running while you are logged out, also run
+`loginctl enable-linger "$USER"` once.
+
+**cron**. Add this line with `crontab -e`, adjusting the path:
+
+```cron
+0 6 * * 0  cd "$HOME/Documents/Projects/retro-analytics" && "$HOME/.local/bin/uv" run --frozen ra run >> data/cron.log 2>&1
+```
+
+Re-run `ra seed` now and then (for example monthly) if you want the tracked
+set to follow PriceCharting's popularity order; the weekly job keeps the games
+you already track.
+
+## Reddit sentiment (optional)
+
+Since late 2025 Reddit reportedly requires approval for API access, so the
+pipeline never needs it. If you have approved credentials:
+
+```sh
+uv sync --extra sentiment
+echo '{"client_id": "...", "secret_key": "..."}' > data/reddit_credentials.json
+uv run ra run --sentiment
+```
+
+Sentiment only reorders games whose forecast growth is equal to 0.1 percentage
+points, so it cannot outweigh a real price difference.
 
 ## PriceCharting etiquette
 
@@ -73,11 +157,23 @@ The scraper is for private use. It sends one request at a time, waits 1-2 s
 between requests, identifies itself with a descriptive User-Agent, times out
 after 30 s and backs off on errors. PriceCharting's terms treat its current and
 historical prices as its property, so keep scraped data local: don't commit
-it, publish it or serve it from a public app. Tests run on trimmed copies of
-real pages in `tests/fixtures/` whose prices were replaced with made-up values.
+it, publish it or serve the report from a public site. The report credits and
+links PriceCharting. Tests run on trimmed copies of real pages in
+`tests/fixtures/` whose prices were replaced with made-up values.
 
-## Layout
+## Development
+
+```sh
+uv sync --all-extras
+uv run pytest
+```
+
+Tests use synthetic data and saved pages; the only network they touch is a
+local test server. CI runs them on Python 3.12 and 3.13.
 
 - `src/retro_analytics/`: the package. `paths.py` holds every file location;
-  `cli.py` is the `ra` entry point; `pipeline.py` chains the stages.
-- `tests/`: pytest suite on synthetic data, no network.
+  `cli.py` is the `ra` entry point; `pipeline.py` chains the stages;
+  `report.py` renders the HTML page.
+- `tests/`: the pytest suite and its HTML fixtures.
+- `examples/`: the three-game end-to-end example.
+- `deploy/systemd/`: the weekly timer.
