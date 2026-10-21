@@ -1,63 +1,49 @@
 # retro-analytics
 
-## DIRECTORY STRUCTURE
-### Data Collection
-**Price Charting Scraper**
+Ranks retro video games by their forecast complete-in-box (CIB) price trend on
+pricecharting.com, combined with Reddit sentiment.
 
-Summary: Collects historical complete in box prices for games on pricecharting.com
+## Quickstart
 
-**Reddit Scraper**
+Requires [uv](https://docs.astral.sh/uv/). Python 3.12 or newer; development uses 3.13.
 
-Summary: Collects comments and posts on several gaming subreddits
+```sh
+uv sync                      # core pipeline
+uv sync --extra sentiment    # also Reddit scraping and NLTK sentiment
+uv run pytest                # run the test suite
+uv run ra --help             # list pipeline stages
+```
 
-### Data Preprocessing
-**Time Series Preprocessing**
+Data is written under `data/` (or `$RA_DATA_DIR`) and fitted models under
+`models/` (or `$RA_MODELS_DIR`). Directories are created on first use. Both are
+gitignored: never commit price data, Reddit data or credentials.
 
-Summary: Converts scraped prices data from pricecharting into a format that can be used for model preprocessing
+## Pipeline stages
 
-**ARIMA Preprocessing**
+Each stage is a `ra` subcommand and reads the files the previous one wrote.
 
-Summary: Preprocessing raw time series data into a format suitable for ARIMA model training
+1. `ra scrape` (`pricecharting.py`): appends today's CIB price for each game on
+   the consoles listed in `data/raw/consoles.csv` to `data/raw/prices.csv`.
+   Known issue: PriceCharting now serves absolute game links, which this
+   scraper does not handle yet, so game fetches currently fail.
+2. `ra sentiment` (`reddit.py`, `sentiment.py`, needs the `sentiment` extra and
+   `data/reddit_credentials.json`): searches Reddit for each game and scores
+   posts and comments with NLTK VADER.
+3. `ra prep` (`time_series.py`, `arima_prep.py`): groups prices into one series
+   per game.
+4. `ra train` (`training.py`): fits an ARIMA model per game, choosing the order
+   by AIC.
+5. `ra forecast` (`forecast.py`): forecasts each model five steps ahead.
+6. `ra rank` (`metrics.py`): combines forecast slope, percent change and
+   sentiment into `data/outputs/results.csv`, best first. It needs the
+   sentiment stage's output, and games without Reddit data are left out.
 
-**LSTM Preprocessing**
+`ra run` runs scrape, prep, train, forecast and rank in order. It does not run
+the sentiment stage, so run `ra sentiment` first when you want fresh Reddit
+data.
 
-NOTE: Currently not implement due to processing power
+## Layout
 
-**Sentiment Preprocessing**
-
-Summary: Converts Reddit posts and comments into numeric values representing pos/neutral/neg sentiment
-
-### Deployment
-**Daily Update**
-
-Summary: Runs the pricecharting scraper to update daily historical prices and saves results. Trains models on updated data and updates new predictions.
-
-**Results App**
-
-Summary: Displays the results of model analyses
-
-### Evaluation
-**Evaulate**
-
-Summary: Generates and saves ARIMA model forecasts
-
-**Metrics**
-
-Summary: Generates metrics to be used to rank video games
-
-
-### Modeling
-**Training**
-
-Summary: Trains ARIMA models on preprocessed time series data
-
-## Order of Operations
-
-1. Data is scraped from reddit with `reddit_scraper.py` and pricecharting.com with `pricecharting_scraper.py`
-2. The raw reddit data is preprocessed to generate sentiment scores for each comment and post in `sentiment_preprocessing.py` and the raw historical price values are preprocessed in `time_series_preprocessing.py` and then later transformed to be ARIMA input in `ARIMA_preprocessing.py`
-3. The ARIMA models are trained in `training.py` on the preprocessed time series data
-4. Forecasts of the trained models are generated and saved in `evaluate.py`
-5. The sentiment analysis and forecasted prices are combined in `metrics.py` to create a ranking of retro video games
-6. The results are displayed in a GUI in `results_app.py`
-
-Repeated: `daily_update.py` scrapes pricecharting.com daily to get up to date prices. The models are then retrained on this new data.
+- `src/retro_analytics/`: the package. `paths.py` holds every file location;
+  `cli.py` is the `ra` entry point; `pipeline.py` chains the stages.
+- `tests/`: pytest suite on synthetic data, no network.

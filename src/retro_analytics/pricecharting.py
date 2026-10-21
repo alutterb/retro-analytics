@@ -1,7 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
 import re
-import os
 import signal
 
 import csv
@@ -9,12 +8,10 @@ import pandas as pd
 
 from datetime import date
 
+from retro_analytics import paths
+
 class TimeoutException(Exception):
     pass
-
-script_dir = os.path.dirname(os.path.realpath(__file__))
-prices_path = os.path.join(script_dir, '../../data/raw/prices.csv')
-consoles_path = os.path.join(script_dir, '../../data/raw/consoles.csv')
 
 def timeout_handler(signum, frame):
     raise TimeoutException
@@ -72,9 +69,10 @@ def return_price(game_URL):
         return None
     
 def update_price_df():
+    prices_path = paths.prices()
     curr_df = pd.read_csv(prices_path)
     consoles = None
-    with open(consoles_path, 'r') as file:
+    with open(paths.consoles(), 'r') as file:
         reader = csv.reader(file)
         consoles = list(reader)[0]
     if consoles:
