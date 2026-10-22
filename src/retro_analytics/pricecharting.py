@@ -248,20 +248,45 @@ def seed(consoles=CONSOLES, top=25, min_price=20.0, games=None, session=None):
         failed = {console for console, _ in failures}
         previous = pd.read_csv(paths.games())
         selected = pd.concat([selected, previous[previous['console'].isin(failed)]], ignore_index=True)
-    selected.to_csv(paths.games(), index=False)
-    print(f"Seeded {len(selected)} games into {paths.games()}")
+    if len(selected):
+        selected.to_csv(paths.games(), index=False)
+        print(f"Seeded {len(selected)} games into {paths.games()}")
     raise_on_failures(failures, len(consoles), "console pages")
+    if not len(selected):
+        raise ScrapeError("no games selected; try a lower --min-price or other consoles")
 
 
 def main(snapshot=False, session=None):
-    games = pd.read_csv(paths.require(paths.games(), "seed"))
+    """Scrape every game in games.csv into prices.csv.
 
-    new, failures = scrape_prices(games, session or PoliteSession(), snapshot=snapshot)
+    On a fresh checkout neither file exists yet: games.csv is first seeded from
+    the default console list, and prices.csv is created.
+    """
+    session = session or PoliteSession()
+    seed_error = None
+    if not paths.games().exists():
+        print(f"{paths.games()} not found; seeding from the {len(CONSOLES)} default consoles")
+        try:
+            seed(consoles=CONSOLES, session=session)
+        except ScrapeError as e:
+            # Some console pages failed: scrape what was seeded, then still fail.
+            if not paths.games().exists():
+                raise
+            seed_error = e
+    games = pd.read_csv(paths.games())
+
+    new, failures = scrape_prices(games, session, snapshot=snapshot)
     prices_path = paths.prices()
     existing = pd.read_csv(prices_path) if prices_path.exists() else pd.DataFrame(columns=PRICE_COLUMNS)
     merge_prices(existing, new).to_csv(prices_path, index=False)
     print(f"Wrote {len(new)} price points for {len(games) - len(failures)} games to {prices_path}")
-    raise_on_failures(failures, len(games), "games")
+    errors = [str(seed_error)] if seed_error else []
+    try:
+        raise_on_failures(failures, len(games), "games")
+    except ScrapeError as e:
+        errors.append(str(e))
+    if errors:
+        raise ScrapeError('; '.join(errors))
 
 
 if __name__ == "__main__":
