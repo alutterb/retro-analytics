@@ -254,17 +254,36 @@ def seed(consoles=CONSOLES, top=25, min_price=20.0, games=None, session=None):
 
 
 def main(snapshot=False, session=None):
-    games_path = paths.games()
-    if not games_path.exists():
-        raise ScrapeError(f"{games_path} not found; run `ra seed` first")
-    games = pd.read_csv(games_path)
+    """Scrape every game in games.csv into prices.csv.
 
-    new, failures = scrape_prices(games, session or PoliteSession(), snapshot=snapshot)
+    On a fresh checkout neither file exists yet: games.csv is first seeded from
+    the default console list, and prices.csv is created.
+    """
+    session = session or PoliteSession()
+    seed_error = None
+    if not paths.games().exists():
+        print(f"{paths.games()} not found; seeding from the {len(CONSOLES)} default consoles")
+        try:
+            seed(consoles=CONSOLES, session=session)
+        except ScrapeError as e:
+            # Some console pages failed: scrape what was seeded, then still fail.
+            if not paths.games().exists():
+                raise
+            seed_error = e
+    games = pd.read_csv(paths.games())
+
+    new, failures = scrape_prices(games, session, snapshot=snapshot)
     prices_path = paths.prices()
     existing = pd.read_csv(prices_path) if prices_path.exists() else pd.DataFrame(columns=PRICE_COLUMNS)
     merge_prices(existing, new).to_csv(prices_path, index=False)
     print(f"Wrote {len(new)} price points for {len(games) - len(failures)} games to {prices_path}")
-    raise_on_failures(failures, len(games), "games")
+    errors = [str(seed_error)] if seed_error else []
+    try:
+        raise_on_failures(failures, len(games), "games")
+    except ScrapeError as e:
+        errors.append(str(e))
+    if errors:
+        raise ScrapeError('; '.join(errors))
 
 
 if __name__ == "__main__":
