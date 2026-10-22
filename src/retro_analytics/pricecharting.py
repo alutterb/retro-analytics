@@ -252,6 +252,8 @@ def seed(consoles=CONSOLES, top=25, min_price=20.0, games=None, session=None):
         selected.to_csv(paths.games(), index=False)
         print(f"Seeded {len(selected)} games into {paths.games()}")
     raise_on_failures(failures, len(consoles), "console pages")
+    if not len(selected):
+        raise ScrapeError("no games selected; try a lower --min-price or other consoles")
 
 
 def main(snapshot=False, session=None):

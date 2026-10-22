@@ -202,6 +202,13 @@ def test_first_scrape_with_no_console_pages_fails(monkeypatch):
     assert not paths.prices().exists()
 
 
+def test_seed_fails_when_no_game_clears_the_price_floor():
+    session = FakeSession({CONSOLE_URL: fixture("console_nes.html")})
+    with pytest.raises(pricecharting.ScrapeError, match="no games selected"):
+        pricecharting.seed(consoles=("nes",), min_price=1e9, session=session)
+    assert not paths.games().exists()
+
+
 def test_cli_turns_scrape_errors_into_exit_code(capsys, monkeypatch):
     def failing(snapshot):
         raise pricecharting.ScrapeError("2 of 5 games failed")
