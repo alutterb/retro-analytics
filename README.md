@@ -30,12 +30,15 @@ Each stage is a `ra` subcommand and reads the files the previous one wrote.
    exactly the games given without reading console pages. The file is plain
    CSV, so you can also edit it by hand. If a console page fails, that
    console's previously seeded rows are kept and the command exits non-zero.
+   If no game is selected at all, `games.csv` is not written and the command
+   exits non-zero; try a lower `--min-price` or other consoles.
 2. `ra scrape` (`pricecharting.py`): fetches each seeded game's page once and
    reads its full monthly CIB price history from the chart data embedded in
    the page, merging it into `data/raw/prices.csv` (created on the first run).
    If `games.csv` does not exist yet, as on a fresh checkout, it first seeds it
    with the `ra seed` defaults, so `ra scrape` alone works from an empty data
-   directory (about 550 requests, so expect 15-20 minutes). `--snapshot` also records
+   directory (about 550 requests, so expect 15-20 minutes); if that seeding
+   selects no games, it stops with an error and writes neither file. `--snapshot` also records
    the price shown today. If any page fails or no longer has chart data, the
    other games are still saved and the command exits non-zero with a count of
    failures.
