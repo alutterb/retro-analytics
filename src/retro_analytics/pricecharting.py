@@ -26,7 +26,7 @@ from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from retro_analytics import paths
+from retro_analytics import PipelineError, paths
 
 BASE_URL = "https://www.pricecharting.com"
 USER_AGENT = "retro-analytics/0.2 (personal price research; +https://github.com/alutterb/retro-analytics)"
@@ -52,7 +52,7 @@ GAME_COLUMNS = ['console', 'game', 'title', 'url']
 PRICE_COLUMNS = ['console', 'game', 'price', 'date']
 
 
-class ScrapeError(Exception):
+class ScrapeError(PipelineError):
     pass
 
 

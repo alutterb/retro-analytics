@@ -5,6 +5,7 @@ for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(var, "1")
 
 import numpy as np
+import pandas as pd
 import pytest
 
 
@@ -16,7 +17,12 @@ def data_dirs(tmp_path, monkeypatch):
     return tmp_path
 
 
+def monthly(values, start="2022-01-01"):
+    return pd.Series(np.asarray(values, dtype=float), index=pd.date_range(start, periods=len(values), freq="MS"))
+
+
 @pytest.fixture
-def trending_series():
+def growing_series():
+    """Four years of a random walk with 2% monthly drift."""
     rng = np.random.default_rng(0)
-    return list(np.round(50 + 0.5 * np.arange(40) + rng.normal(0, 0.3, 40), 2))
+    return monthly(100 * np.exp(np.cumsum(0.02 + rng.normal(0, 0.01, 48))))
