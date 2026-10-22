@@ -1,46 +1,57 @@
+"""Score Reddit posts and comments with NLTK's VADER and average them per game (optional)."""
+
+import nltk
 import pandas as pd
-from nltk.corpus import stopwords
 from nltk.sentiment import SentimentIntensityAnalyzer
-from nltk.stem import WordNetLemmatizer
-from nltk.tokenize import word_tokenize
 
 from retro_analytics import paths
 
+SENTIMENT_COLUMNS = ['console', 'game', 'sentiment', 'n_texts']
 
-def calculate_sentiment(text):
-    if type(text) == str:
-        sid = SentimentIntensityAnalyzer()
-        tokens = word_tokenize(text)
 
-        # remove stop words
-        stop_words = set(stopwords.words('english'))
-        tokens = [token for token in tokens if token.lower() not in stop_words]
+def make_analyzer():
+    """A VADER analyzer, downloading its lexicon the first time it is needed."""
+    try:
+        return SentimentIntensityAnalyzer()
+    except LookupError:
+        nltk.download('vader_lexicon', quiet=True)
+        return SentimentIntensityAnalyzer()
 
-        # lemmatize the text
-        lemmatizer = WordNetLemmatizer()
-        tokens = [lemmatizer.lemmatize(token) for token in tokens]
 
-        # join the tokens back into a string
-        processed_text = ' '.join(tokens)
+def score_texts(texts, analyzer):
+    """VADER compound score (-1 to 1) per text; None for missing or blank text.
 
-        # use the sentiment analyzer to get the sentiment score
-        score = sid.polarity_scores(processed_text)
-    else:
-        return "Missing"
+    Raw text goes straight to VADER: it handles negation, punctuation and
+    capitalisation itself, so stripping stopwords would only lose signal.
+    """
+    return [
+        analyzer.polarity_scores(text)['compound'] if isinstance(text, str) and text.strip() else None
+        for text in texts
+    ]
 
-    return score
 
-def main():
-    posts_df = pd.read_csv(paths.reddit_posts())
-    comments_df = pd.read_csv(paths.reddit_comments())
+def game_sentiment(posts, comments, analyzer):
+    """Mean compound score over every post title, post body and comment of each game."""
+    texts = pd.concat([
+        posts[['console', 'game', 'title']].rename(columns={'title': 'text'}),
+        posts[['console', 'game', 'body']].rename(columns={'body': 'text'}),
+        comments[['console', 'game', 'comment_text']].rename(columns={'comment_text': 'text'}),
+    ], ignore_index=True)
+    texts['compound'] = score_texts(texts['text'], analyzer)
+    texts = texts.dropna(subset=['compound'])
+    if texts.empty:
+        return pd.DataFrame(columns=SENTIMENT_COLUMNS)
+    grouped = texts.groupby(['console', 'game'])['compound']
+    return pd.DataFrame({'sentiment': grouped.mean(), 'n_texts': grouped.size()}).reset_index()[SENTIMENT_COLUMNS]
 
-    posts_df['title sentiment'] = posts_df['title'].apply(calculate_sentiment)
-    posts_df['body sentiment'] = posts_df['body'].apply(calculate_sentiment)
-    
-    comments_df['comment sentiment'] = comments_df['comment_text'].apply(calculate_sentiment)
 
-    posts_df.to_csv(paths.preprocessed_posts())
-    comments_df.to_csv(paths.preprocessed_comments())
+def main(analyzer=None):
+    posts = pd.read_csv(paths.require(paths.reddit_posts(), "sentiment"))
+    comments = pd.read_csv(paths.require(paths.reddit_comments(), "sentiment"))
+    scores = game_sentiment(posts, comments, analyzer or make_analyzer())
+    scores.to_csv(paths.sentiment(), index=False)
+    print(f"Scored sentiment for {len(scores)} games into {paths.sentiment()}")
+
 
 if __name__ == "__main__":
     main()

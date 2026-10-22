@@ -1,75 +1,82 @@
-import pickle
-import warnings
+"""Choose a forecasting model per game.
 
-from statsmodels.tsa.arima.model import ARIMA
-from multiprocessing import Pool
+Prices are modelled on the log scale, so a trend means steady percentage
+growth. Each game gets an ARIMA(p, 1, q) with p, q <= 2, picked by AIC, and
+every model carries a drift term: a series that has been rising keeps rising in
+the forecast instead of flattening out, which is what the old drift-free
+models did. If no ARIMA fits, the game falls back to a random walk with drift:
+the average monthly log change carried forward.
+
+The chosen specification, not the fitted object, is saved; forecasting refits it.
+"""
 
 import itertools
+import warnings
 
-from retro_analytics import paths
+import numpy as np
+import pandas as pd
+from statsmodels.tools.sm_exceptions import ConvergenceWarning
+from statsmodels.tsa.arima.model import ARIMA
 
-warnings.filterwarnings("ignore")  # Ignore ARIMA warnings for better readability
+from retro_analytics import paths, time_series
 
-def find_best_order(timeseries, max_p=3, max_d=2, max_q=3):
-    best_order = None
-    best_aic = float("inf")
+MIN_POINTS = 12
+MAX_P = 2
+MAX_Q = 2
+D = 1
 
-    for p, d, q in itertools.product(range(max_p + 1), range(max_d + 1), range(max_q + 1)):
-        if p == 0 and d == 0 and q == 0:
-            continue
+SPEC_COLUMNS = ['console', 'game', 'n_points', 'method', 'p', 'd', 'q', 'aic']
+
+
+def fit_arima(log_prices, order):
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', ConvergenceWarning)
+        warnings.simplefilter('ignore', UserWarning)
+        # With one difference, trend 't' is the drift (the mean monthly log change).
+        return ARIMA(log_prices, order=order, trend='t').fit()
+
+
+def select_model(prices):
+    """The best ARIMA by AIC for one price series, or the drift fallback."""
+    log_prices = np.log(np.asarray(prices, dtype=float))
+    best, failures = None, []
+    for p, q in itertools.product(range(MAX_P + 1), range(MAX_Q + 1)):
         try:
-            model = ARIMA(timeseries, order=(p, d, q))
-            model_fit = model.fit()
-            if model_fit.aic < best_aic:
-                best_aic = model_fit.aic
-                best_order = (p, d, q)
-        except:
+            fitted = fit_arima(log_prices, (p, D, q))
+        except (ValueError, np.linalg.LinAlgError, ConvergenceWarning) as e:
+            failures.append(f"({p},{D},{q}): {e}")
             continue
-    return best_order
-
-def train_arima(key_data_tuple):
-    key, timeseries = key_data_tuple
-    print(f"Training ARIMA model for {key[1]} on {key[0]}")
-
-    try:
-        if timeseries:
-            best_order = find_best_order(timeseries)
-            if best_order is not None:
-                model = ARIMA(timeseries, order=best_order)
-                model_fit = model.fit()
-                return key, model_fit
-            else:
-                return key, None
-        else:
-            return key, None
-    except Exception as e:
-        print(f"Error while training ARIMA model for {key[1]} on {key[0]}: {e}")
-        return key, None
+        if np.isfinite(fitted.aic) and (best is None or fitted.aic < best['aic']):
+            best = {'method': 'arima', 'p': p, 'd': D, 'q': q, 'aic': fitted.aic}
+    if best is None:
+        print(f"  no ARIMA fit converged, using drift ({len(failures)} failures; first: {failures[0]})")
+        return {'method': 'drift', 'p': None, 'd': None, 'q': None, 'aic': None}
+    return best
 
 
-# parallel processing on ARIMA model training
-def train_models(data, num_processes):
-    models = {}
-    with Pool(num_processes) as p:
-        results = p.map(train_arima, data.items())
-    for key, model_fit in results:
-        if model_fit is not None:
-            models[key] = model_fit
-    return models
+def select_models(series, min_points=MIN_POINTS):
+    """Model specs for every series long enough to model."""
+    rows, skipped = [], 0
+    for (console, game), prices in series.items():
+        prices = prices.dropna()
+        if len(prices) < min_points:
+            print(f"Skipping {console}/{game}: {len(prices)} months of prices, need {min_points}")
+            skipped += 1
+            continue
+        if (prices <= 0).any():
+            print(f"Skipping {console}/{game}: non-positive prices")
+            skipped += 1
+            continue
+        print(f"Selecting model for {console}/{game}")
+        rows.append({'console': console, 'game': game, 'n_points': len(prices), **select_model(prices)})
+    print(f"Selected {len(rows)} models, skipped {skipped} series")
+    return pd.DataFrame(rows, columns=SPEC_COLUMNS)
 
-def load_data(input_path):
-    with open(input_path, 'rb') as f:
-        data = pickle.load(f)
-    return data
-
-def save_models(models, output_path):
-    with open(output_path, 'wb') as f:
-        pickle.dump(models, f)
 
 def main():
-    data = load_data(paths.arima_input())
-    models = train_models(data, num_processes=3)
-    save_models(models, paths.arima_models())
+    specs = select_models(time_series.load_series())
+    specs.to_csv(paths.model_specs(), index=False)
+
 
 if __name__ == "__main__":
     main()

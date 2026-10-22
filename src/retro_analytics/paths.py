@@ -9,6 +9,8 @@ checkout needs no setup.
 import os
 from pathlib import Path
 
+from retro_analytics import PipelineError
+
 PROJECT_DIR = Path(__file__).resolve().parents[2]
 
 
@@ -41,8 +43,8 @@ def prices() -> Path:
     return raw("prices.csv")
 
 
-def consoles() -> Path:
-    return raw("consoles.csv")
+def games() -> Path:
+    return raw("games.csv")
 
 
 def reddit_posts() -> Path:
@@ -50,36 +52,35 @@ def reddit_posts() -> Path:
 
 
 def reddit_comments() -> Path:
-    return raw("comments.csv")
+    return raw("reddit_comments.csv")
 
 
 def reddit_credentials() -> Path:
     return _ensure(data_dir() / "reddit_credentials.json")
 
 
-def historical_prices() -> Path:
-    return preprocessed("scraped_data/historical prices.csv")
+def series() -> Path:
+    return preprocessed("series.csv")
 
 
-def preprocessed_posts() -> Path:
-    return preprocessed("scraped_data/preprocessed_posts.csv")
+def sentiment() -> Path:
+    return preprocessed("sentiment.csv")
 
 
-def preprocessed_comments() -> Path:
-    return preprocessed("scraped_data/preprocessed_comments.csv")
+def model_specs() -> Path:
+    return _ensure(models_dir() / "model_specs.csv")
 
 
-def arima_input() -> Path:
-    return preprocessed("model_input/preprocessed_input_ARIMA.pickle")
-
-
-def arima_models() -> Path:
-    return _ensure(models_dir() / "ARIMA" / "models_ARIMA.pickle")
-
-
-def predictions() -> Path:
-    return output("predictions.pickle")
+def forecasts() -> Path:
+    return output("forecasts.csv")
 
 
 def results() -> Path:
     return output("results.csv")
+
+
+def require(path: Path, stage: str) -> Path:
+    """`path`, or a PipelineError naming the stage that produces it."""
+    if not path.exists():
+        raise PipelineError(f"{path} not found; run `ra {stage}` first")
+    return path
