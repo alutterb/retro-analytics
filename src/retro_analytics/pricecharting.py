@@ -248,8 +248,9 @@ def seed(consoles=CONSOLES, top=25, min_price=20.0, games=None, session=None):
         failed = {console for console, _ in failures}
         previous = pd.read_csv(paths.games())
         selected = pd.concat([selected, previous[previous['console'].isin(failed)]], ignore_index=True)
-    selected.to_csv(paths.games(), index=False)
-    print(f"Seeded {len(selected)} games into {paths.games()}")
+    if len(selected):
+        selected.to_csv(paths.games(), index=False)
+        print(f"Seeded {len(selected)} games into {paths.games()}")
     raise_on_failures(failures, len(consoles), "console pages")
 
 

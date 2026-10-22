@@ -198,6 +198,8 @@ def test_first_scrape_with_no_console_pages_fails(monkeypatch):
     monkeypatch.setattr(pricecharting, "CONSOLES", ("nes",))
     with pytest.raises(pricecharting.ScrapeError, match="1 of 1 console pages failed"):
         pricecharting.main(session=FakeSession({}))
+    assert not paths.games().exists()
+    assert not paths.prices().exists()
 
 
 def test_cli_turns_scrape_errors_into_exit_code(capsys, monkeypatch):
