@@ -40,8 +40,8 @@ Each stage is a `ra` subcommand and reads the files the previous one wrote.
    If `games.csv` does not exist yet, as on a fresh checkout, it first seeds it
    with the `ra seed` defaults, so `ra scrape` alone works from an empty data
    directory (about 550 requests, so expect 15-20 minutes); if that seeding
-   selects no games, it stops with an error and writes neither file. `--snapshot` also records
-   the price shown today. If any page fails or no longer has chart data, the
+   selects no games, it stops with an error and writes neither file.
+   `--snapshot` also records the price shown today. If any page fails or no longer has chart data, the
    other games are still saved and the command exits non-zero with a count of
    failures.
 3. `ra sentiment` (optional; `reddit.py`, `sentiment.py`, needs the
