@@ -8,7 +8,7 @@ import sys
 for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_var, "1")
 
-from retro_analytics import PipelineError, forecast, metrics, pipeline, pricecharting, training
+from retro_analytics import PipelineError, forecast, metrics, pipeline, pricecharting, report, training
 
 
 def add_seed_args(parser):
@@ -30,6 +30,8 @@ def add_run_args(parser):
     add_scrape_args(parser)
     parser.add_argument('--sentiment', action='store_true',
                         help="also collect Reddit sentiment as a tie-breaker (needs the sentiment extra and credentials)")
+    parser.add_argument('--game', action='append', dest='games', metavar='CONSOLE/SLUG',
+                        help="track exactly these games (re-seeds games.csv first; repeatable)")
 
 
 def seed(args):
@@ -51,8 +53,9 @@ COMMANDS = {
     "train": (lambda args: training.main(), "choose a forecasting model per game", None),
     "forecast": (lambda args: forecast.main(), "forecast each game's price six months ahead", None),
     "rank": (lambda args: metrics.main(), "rank games by forecast price growth into results.csv", None),
-    "run": (lambda args: pipeline.run(snapshot=args.snapshot, with_sentiment=args.sentiment),
-            "scrape, prep, train, forecast and rank in one go", add_run_args),
+    "report": (lambda args: report.main(), "write the ranking as a static HTML page (report.html)", None),
+    "run": (lambda args: pipeline.run(snapshot=args.snapshot, with_sentiment=args.sentiment, games=args.games),
+            "scrape, prep, train, forecast, rank and report in one go", add_run_args),
 }
 
 

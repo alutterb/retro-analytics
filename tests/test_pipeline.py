@@ -7,7 +7,8 @@ from retro_analytics import cli, paths, pipeline, pricecharting
 def stages(monkeypatch):
     ran = []
     for module, name in [(pipeline.time_series, "prep"), (pipeline.training, "train"),
-                         (pipeline.forecast, "forecast"), (pipeline.metrics, "rank")]:
+                         (pipeline.forecast, "forecast"), (pipeline.metrics, "rank"),
+                         (pipeline.report, "report")]:
         monkeypatch.setattr(module, "main", lambda name=name: ran.append(name))
     monkeypatch.setattr(pipeline, "sentiment", lambda: ran.append("sentiment"))
     return ran
@@ -20,12 +21,12 @@ def scrape_ok(monkeypatch):
 
 def test_run_is_price_only_by_default(scrape_ok, stages):
     pipeline.run()
-    assert stages == ["prep", "train", "forecast", "rank"]
+    assert stages == ["prep", "train", "forecast", "rank", "report"]
 
 
 def test_run_with_sentiment_collects_it_before_ranking(scrape_ok, stages):
     cli.main(["run", "--sentiment"])
-    assert stages == ["sentiment", "prep", "train", "forecast", "rank"]
+    assert stages == ["sentiment", "prep", "train", "forecast", "rank", "report"]
 
 
 def test_run_ranks_partial_scrape_then_fails(monkeypatch, stages):
@@ -36,7 +37,7 @@ def test_run_ranks_partial_scrape_then_fails(monkeypatch, stages):
     monkeypatch.setattr(pipeline.pricecharting, "main", partial_scrape)
     with pytest.raises(pricecharting.ScrapeError, match="1 of 2"):
         pipeline.run()
-    assert stages == ["prep", "train", "forecast", "rank"]
+    assert stages == ["prep", "train", "forecast", "rank", "report"]
 
 
 def test_run_stops_when_nothing_was_scraped(monkeypatch, stages):
@@ -54,3 +55,12 @@ def test_cli_reports_missing_inputs_with_exit_code(capsys):
         cli.main(["rank"])
     assert exit_info.value.code == 1
     assert "run `ra prep` first" in capsys.readouterr().err
+
+
+def test_run_with_games_seeds_them_first(scrape_ok, stages):
+    cli.main(["run", "--game", "nes/legend-of-zelda", "--game", "sega-genesis/sonic-the-hedgehog"])
+    assert paths.games().read_text().splitlines()[1:] == [
+        "nes,legend-of-zelda,Legend Of Zelda,https://www.pricecharting.com/game/nes/legend-of-zelda",
+        "sega-genesis,sonic-the-hedgehog,Sonic The Hedgehog,https://www.pricecharting.com/game/sega-genesis/sonic-the-hedgehog",
+    ]
+    assert stages[-1] == "report"

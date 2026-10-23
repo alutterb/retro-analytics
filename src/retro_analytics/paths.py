@@ -79,6 +79,10 @@ def results() -> Path:
     return output("results.csv")
 
 
+def report() -> Path:
+    return output("report.html")
+
+
 def require(path: Path, stage: str) -> Path:
     """`path`, or a PipelineError naming the stage that produces it."""
     if not path.exists():

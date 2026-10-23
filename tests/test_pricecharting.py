@@ -123,6 +123,11 @@ def test_seed_explicit_games_makes_no_requests():
     assert session.requested == []
 
 
+def test_explicit_games_get_readable_titles():
+    games = pricecharting.explicit_games(["nes/mike-tyson%27s-punch-out"])
+    assert games["title"].tolist() == ["Mike Tyson's Punch Out"]
+
+
 @pytest.mark.parametrize("spec", ["nes", "nes/", "/zelda", "nes/game/extra"])
 def test_explicit_games_rejects_bad_specs(spec):
     with pytest.raises(ValueError):

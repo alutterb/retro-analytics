@@ -1,0 +1,12 @@
+# Runs retro-analytics.service once a week. Persistent=true catches up after
+# the machine was off at the scheduled time.
+[Unit]
+Description=Weekly retro-analytics refresh
+
+[Timer]
+OnCalendar=Sun *-*-* 06:00
+RandomizedDelaySec=30m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -18,7 +18,7 @@ import random
 import re
 import time
 from datetime import UTC, date, datetime
-from urllib.parse import urljoin
+from urllib.parse import unquote, urljoin
 
 import pandas as pd
 import requests
@@ -167,6 +167,12 @@ def game_url(console, game):
     return f"{BASE_URL}/game/{console}/{game}"
 
 
+def title_from_slug(slug):
+    """A readable stand-in title: 'mike-tyson%27s-punch-out' -> "Mike Tyson's Punch Out"."""
+    words = unquote(slug).replace('-', ' ').split()
+    return ' '.join(word[:1].upper() + word[1:] for word in words)
+
+
 def explicit_games(specs):
     """Turn 'console/game-slug' strings into seed rows."""
     games = []
@@ -174,7 +180,7 @@ def explicit_games(specs):
         console, _, game = spec.strip('/').partition('/')
         if not console or not game or '/' in game:
             raise ValueError(f"expected console/game-slug, got {spec!r}")
-        games.append({'console': console, 'game': game, 'title': game, 'url': game_url(console, game)})
+        games.append({'console': console, 'game': game, 'title': title_from_slug(game), 'url': game_url(console, game)})
     return pd.DataFrame(games, columns=GAME_COLUMNS)
 
 
