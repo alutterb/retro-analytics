@@ -55,6 +55,10 @@ def reddit_comments() -> Path:
     return raw("reddit_comments.csv")
 
 
+def settings() -> Path:
+    return _ensure(data_dir() / "settings.toml")
+
+
 def reddit_credentials() -> Path:
     return _ensure(data_dir() / "reddit_credentials.json")
 
@@ -81,6 +85,10 @@ def results() -> Path:
 
 def report() -> Path:
     return output("report.html")
+
+
+def export() -> Path:
+    return output("latest.json")
 
 
 def require(path: Path, stage: str) -> Path:
