@@ -8,7 +8,8 @@ import sys
 for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_var, "1")
 
-from retro_analytics import PipelineError, export, forecast, metrics, pipeline, pricecharting, report, training
+from retro_analytics import (PipelineError, export, forecast, metrics, pipeline, pricecharting, publish, report,
+                             training)
 
 
 def add_seed_args(parser):
@@ -56,6 +57,8 @@ COMMANDS = {
     "report": (lambda args: report.main(), "write the ranking as a static HTML page (report.html)", None),
     "export": (lambda args: export.main(),
                "write the rising and crashing games as JSON for the phone app (latest.json)", None),
+    "publish": (lambda args: publish.main(),
+                "commit latest.json to the private results repository set in settings.toml", None),
     "run": (lambda args: pipeline.run(snapshot=args.snapshot, with_sentiment=args.sentiment, games=args.games),
             "scrape, prep, train, forecast, rank and report in one go", add_run_args),
 }
