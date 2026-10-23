@@ -34,9 +34,10 @@ def build(results, series, forecasts, thresholds, games=None, generated=None):
     history = {key: rows.sort_values('month') for key, rows in series.groupby(['console', 'game'])}
     future = {key: rows.sort_values('step') for key, rows in forecasts.groupby(['console', 'game'])}
     ranked = results.set_index(['console', 'game'])
+    horizon = int(forecasts['step'].max()) if not forecasts.empty else forecast.HORIZON
 
     exported = []
-    for flagged in flags.flag_games(results, series, thresholds):
+    for flagged in flags.flag_games(results, series, thresholds, horizon):
         key = (flagged['console'], flagged['game'])
         r = ranked.loc[key]
         past = history[key].tail(HISTORY_MONTHS)
@@ -63,7 +64,7 @@ def build(results, series, forecasts, thresholds, games=None, generated=None):
     return {
         'schema_version': SCHEMA_VERSION,
         'generated': generated or date.today().isoformat(),
-        'horizon_months': int(forecasts['step'].max()) if not forecasts.empty else forecast.HORIZON,
+        'horizon_months': horizon,
         'thresholds': thresholds,
         'games': exported,
     }

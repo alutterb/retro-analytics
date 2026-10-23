@@ -7,7 +7,7 @@ errors, so a typo cannot silently fall back to a default.
 """
 
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 from retro_analytics import PipelineError, paths
 
@@ -16,8 +16,6 @@ DEFAULT_THRESHOLDS = {
     'rising': {'forecast_pct': 10.0, 'change_1m_pct': 15.0, 'change_3m_pct': 25.0, 'change_6m_pct': 40.0},
     'crashing': {'forecast_pct': -10.0, 'change_1m_pct': -10.0, 'change_3m_pct': -15.0, 'change_6m_pct': -25.0},
 }
-
-PUBLISH_KEYS = {'repo', 'branch', 'path'}
 
 
 @dataclass(frozen=True)
@@ -36,10 +34,8 @@ class Settings:
 def load():
     """Settings from ``settings.toml``, merged over the defaults."""
     path = paths.settings()
-    if not path.exists():
-        return Settings(thresholds={d: dict(t) for d, t in DEFAULT_THRESHOLDS.items()}, publish=None)
     try:
-        raw = tomllib.loads(path.read_text(encoding='utf-8'))
+        raw = tomllib.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
     except tomllib.TOMLDecodeError as e:
         raise PipelineError(f"{path} is not valid TOML: {e}") from e
 
@@ -63,7 +59,7 @@ def load():
     publish = None
     if 'publish' in raw:
         given = raw['publish']
-        unknown = set(given) - PUBLISH_KEYS
+        unknown = set(given) - {f.name for f in fields(Publish)}
         if unknown:
             fail(f"unknown key(s) publish.{', publish.'.join(sorted(unknown))}")
         if not isinstance(given.get('repo'), str) or not given['repo'].strip():

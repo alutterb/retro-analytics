@@ -33,6 +33,10 @@ def github_repo(url):
     return match['repo'] if match else None
 
 
+def _last_line(stderr):
+    return (stderr.strip().splitlines() or ['no output'])[-1]
+
+
 def check_private(url):
     """Raise unless GitHub reports the repository as private."""
     parts = urlsplit(url)
@@ -50,8 +54,7 @@ def check_private(url):
     except subprocess.TimeoutExpired as e:
         raise PublishError(f"cannot confirm {repo} is private: gh timed out") from e
     if result.returncode != 0:
-        detail = (result.stderr.strip().splitlines() or ['no output'])[-1]
-        raise PublishError(f"cannot confirm {repo} is private: gh failed ({detail})")
+        raise PublishError(f"cannot confirm {repo} is private: gh failed ({_last_line(result.stderr)})")
     if result.stdout.strip() != 'true':
         raise PublishError(f"refusing to publish to {repo}: it is not private")
 
@@ -59,13 +62,11 @@ def check_private(url):
 def _git(*args, cwd=None):
     result = subprocess.run(['git', *args], cwd=cwd, capture_output=True, text=True)
     if result.returncode != 0:
-        detail = (result.stderr.strip().splitlines() or ['no output'])[-1]
-        raise PublishError(f"git {args[0]} failed: {detail}")
+        raise PublishError(f"git {args[0]} failed: {_last_line(result.stderr)}")
     return result.stdout
 
 
-def _same_results(old_path, new_document):
-    """True when only the generation date differs."""
+def _only_generated_differs(old_path, new_document):
     try:
         old = json.loads(old_path.read_text(encoding='utf-8'))
     except (OSError, ValueError):
@@ -88,7 +89,7 @@ def push(target, source):
         destination = (clone / target.path).resolve()
         if not destination.is_relative_to(clone.resolve()):
             raise PublishError(f"publish.path {target.path} must stay inside the repository")
-        if destination.exists() and _same_results(destination, document):
+        if destination.exists() and _only_generated_differs(destination, document):
             print(f"Results unchanged; nothing published to {target.repo}")
             return
         destination.parent.mkdir(parents=True, exist_ok=True)

@@ -47,6 +47,7 @@ def run(snapshot=False, with_sentiment=False, games=None):
         # The export is written; report the failure after the run, like a partial scrape.
         print(f"publish failed: {e}")
         publish_error = e
-    if scrape_error or publish_error:
-        raise scrape_error or publish_error
+    error = scrape_error or publish_error
+    if error:
+        raise error
     print("complete")
