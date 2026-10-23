@@ -60,7 +60,7 @@ COMMANDS = {
     "publish": (lambda args: publish.main(),
                 "commit latest.json to the private results repository set in settings.toml", None),
     "run": (lambda args: pipeline.run(snapshot=args.snapshot, with_sentiment=args.sentiment, games=args.games),
-            "scrape, prep, train, forecast, rank and report in one go", add_run_args),
+            "scrape, prep, train, forecast, rank, report, export and publish in one go", add_run_args),
 }
 
 

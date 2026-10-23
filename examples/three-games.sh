@@ -16,3 +16,4 @@ uv run ra run \
 
 echo "Ranking: $RA_DATA_DIR/outputs/results.csv"
 echo "Report:  $RA_DATA_DIR/outputs/report.html"
+echo "Export:  $RA_DATA_DIR/outputs/latest.json"

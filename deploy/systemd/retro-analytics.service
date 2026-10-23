@@ -10,4 +10,7 @@ After=network-online.target
 Type=oneshot
 WorkingDirectory=%h/Documents/Projects/retro-analytics
 ExecStart=%h/.local/bin/uv run --frozen ra run
+# To publish to the results repository with a deploy key (README, "Phone
+# export and publishing"), uncomment:
+#Environment="GIT_SSH_COMMAND=ssh -i %h/.ssh/retro_analytics_data -o IdentitiesOnly=yes"
 Nice=10
