@@ -1,0 +1,75 @@
+"""Flag games whose price is rising or crashing.
+
+Two signals, in both directions: the forecast growth from the ranking, and the
+realized price change over the last 1, 3 and 6 months. A game is rising when
+any signal is at or above its rising threshold and crashing when any is at or
+below its crashing threshold, so one game can be both (a recent drop with a
+forecast recovery). Every triggered condition is kept as a reason.
+"""
+
+import pandas as pd
+
+from retro_analytics import forecast
+
+WINDOWS = (1, 3, 6)
+
+
+def realized_changes(prices):
+    """Percentage change from k months before the latest month, per window.
+
+    `prices` is one game's monthly prices indexed by month. A window whose
+    starting month is not in the series is None, not zero.
+    """
+    prices = prices.copy()
+    prices.index = pd.to_datetime(prices.index)
+    prices = prices.sort_index()
+    latest_month, latest = prices.index[-1], prices.iloc[-1]
+    changes = {}
+    for k in WINDOWS:
+        start = latest_month - pd.DateOffset(months=k)
+        changes[k] = (latest / prices[start] - 1) * 100 if start in prices.index else None
+    return changes
+
+
+def _text(signal, value, horizon):
+    word = 'up' if value >= 0 else 'down'
+    if signal == 'forecast':
+        return f"forecast {word} {abs(value):.0f}% in {horizon} months"
+    months = int(signal.removeprefix('change_').removesuffix('m'))
+    return f"{word} {abs(value):.0f}% in {months} month{'s' if months != 1 else ''}"
+
+
+def reasons(growth_pct, changes, thresholds, horizon=forecast.HORIZON):
+    """Every rising or crashing condition one game meets."""
+    signals = {'forecast': growth_pct, **{f'change_{k}m': changes[k] for k in WINDOWS}}
+    found = []
+    for direction, beyond in (('rising', float.__ge__), ('crashing', float.__le__)):
+        for signal, value in signals.items():
+            if value is None or pd.isna(value):
+                continue
+            threshold = thresholds[direction][f'{signal}_pct']
+            if beyond(float(value), threshold):
+                found.append({
+                    'direction': direction, 'signal': signal, 'value_pct': float(value),
+                    'threshold_pct': threshold, 'text': _text(signal, float(value), horizon),
+                })
+    return found
+
+
+def flag_games(results, series, thresholds, horizon=forecast.HORIZON):
+    """Flagged games in ranking order: console, game, changes and reasons.
+
+    `results` is the ranking (console, game, growth_pct); `series` the long
+    monthly table written by `ra prep`.
+    """
+    history = {key: rows.set_index('month')['price'] for key, rows in series.groupby(['console', 'game'])}
+    flagged = []
+    for r in results.itertuples(index=False):
+        prices = history.get((r.console, r.game))
+        if prices is None or prices.empty:
+            continue
+        changes = realized_changes(prices)
+        found = reasons(r.growth_pct, changes, thresholds, horizon)
+        if found:
+            flagged.append({'console': r.console, 'game': r.game, 'changes': changes, 'reasons': found})
+    return flagged
