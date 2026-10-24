@@ -5,6 +5,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.IOException
+import java.security.GeneralSecurityException
+import java.security.ProviderException
 
 /**
  * The one refresh path, used when the app opens and by the daily worker.
@@ -19,7 +22,16 @@ class ResultsRepository(context: Context) {
     val hasToken: Boolean get() = settings.hasToken
     val resultsUrl: String get() = settings.resultsUrl
     fun cached(): Results? = store.read()
-    fun newKeys(): Set<Pair<String, Direction>> = store.newlyFlaggedKeys()
+    fun newKeys(): Set<FlagKey> = store.newlyFlaggedKeys()
+    fun pendingKeys(): Set<FlagKey> = store.pendingKeys()
+
+    fun setPendingKeys(keys: Set<FlagKey>) {
+        try {
+            store.setPendingKeys(keys)
+        } catch (e: IOException) {
+            // The flags stay marked "New" in the lists; only the notification is lost.
+        }
+    }
     fun savedToken(): String? = settings.token()
 
     var rejectedTokenNotified: Boolean
@@ -39,23 +51,34 @@ class ResultsRepository(context: Context) {
     suspend fun test(url: String, token: String): Refreshed = withContext(Dispatchers.IO) { sync.test(url, token) }
 
     /**
-     * Saves the settings and returns whether the location changed. A new
-     * location starts with an empty cache, so its first download notifies nothing.
+     * Saves the settings. A new location starts with an empty cache, so its
+     * first download notifies nothing. If the token cannot be stored, nothing changes.
      */
-    suspend fun save(url: String, token: String?): Boolean = lock.withLock {
+    suspend fun save(url: String, token: String?): SaveResult = lock.withLock {
         withContext(Dispatchers.IO) {
+            if (!token.isNullOrBlank()) {
+                try {
+                    settings.saveToken(token)
+                } catch (e: GeneralSecurityException) {
+                    return@withContext SaveResult.TokenNotStored
+                } catch (e: ProviderException) {
+                    return@withContext SaveResult.TokenNotStored
+                }
+                settings.tokenWarningShown = false
+            }
             val locationChanged = isNewLocation(settings.resultsUrl, url)
             if (locationChanged) store.clear()
             settings.resultsUrl = url
-            if (!token.isNullOrBlank()) {
-                settings.saveToken(token)
-                settings.tokenWarningShown = false
-            }
-            locationChanged
+            SaveResult.Saved(locationChanged)
         }
     }
 
     private companion object {
         val lock = Mutex()
     }
+}
+
+sealed interface SaveResult {
+    data class Saved(val locationChanged: Boolean) : SaveResult
+    data object TokenNotStored : SaveResult
 }

@@ -69,3 +69,45 @@ class NewlyFlaggedTest {
         assertEquals("Zelda is newly rising", summaryText(newlyFlagged(parsed(), current)))
     }
 }
+
+class AnnouncementTest {
+    private val current = parsed(
+        game("earthbound", "EarthBound", flags = listOf("crashing" to -18.0)),
+        game("zelda", "Zelda", flags = listOf("rising" to 11.0)),
+    )
+    private val fresh = newlyFlagged(parsed(), current)
+
+    private fun titles(a: Announcement) = a.announce.map { it.game.title }
+
+    @Test
+    fun deniedRefreshKeepsPendingAndPostsNothing() {
+        val denied = announcement(emptySet(), current, fresh, canPost = false)
+        assertEquals(emptyList<String>(), titles(denied))
+        assertEquals(fresh.map { it.id }.toSet(), denied.pending)
+    }
+
+    @Test
+    fun grantedRefreshPostsOneSummaryNamingPendingAndClearsIt() {
+        val denied = announcement(emptySet(), current, fresh, canPost = false)
+        val granted = announcement(denied.pending, current, emptyList(), canPost = true)
+        assertEquals(
+            "2 newly flagged: EarthBound crashing, Zelda rising",
+            summaryText(granted.announce),
+        )
+        assertEquals(emptySet<FlagKey>(), granted.pending)
+    }
+
+    @Test
+    fun laterIdenticalRefreshPostsNothing() {
+        val after = announcement(emptySet(), current, emptyList(), canPost = true)
+        assertEquals(emptyList<String>(), titles(after))
+        assertEquals(emptySet<FlagKey>(), after.pending)
+    }
+
+    @Test
+    fun pendingFlagNoLongerFlaggedIsDropped() {
+        val later = parsed(game("zelda", "Zelda", flags = listOf("rising" to 11.0)))
+        val granted = announcement(fresh.map { it.id }.toSet(), later, emptyList(), canPost = true)
+        assertEquals(listOf("Zelda"), titles(granted))
+    }
+}

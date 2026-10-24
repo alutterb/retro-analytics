@@ -1,7 +1,9 @@
 package io.github.alutterb.retroanalytics.data
 
+typealias FlagKey = Pair<String, Direction>
+
 data class NewFlag(val game: Game, val direction: Direction) {
-    val id: Pair<String, Direction> get() = game.key to direction
+    val id: FlagKey get() = game.key to direction
 }
 
 /**
@@ -25,4 +27,20 @@ fun summaryText(newFlags: List<NewFlag>): String {
     if (single != null) return "${single.game.title} is newly ${single.direction.label}"
     val names = newFlags.joinToString(", ") { "${it.game.title} ${it.direction.label}" }
     return "${newFlags.size} newly flagged: $names"
+}
+
+/** What to tell the owner now, and which flags still wait for a notification that could be posted. */
+data class Announcement(val announce: List<NewFlag>, val pending: Set<FlagKey>)
+
+/**
+ * New flags plus earlier ones that could not be announced, still flagged in
+ * [current], as one summary. While notifications are not permitted nothing is
+ * announced and everything waits; once permitted, the wait ends.
+ */
+fun announcement(pending: Set<FlagKey>, current: Results, newFlags: List<NewFlag>, canPost: Boolean): Announcement {
+    val wanted = pending + newFlags.map { it.id }
+    val due = current.games.flatMap { game ->
+        game.flags.map { it.direction }.distinct().map { NewFlag(game, it) }
+    }.filter { it.id in wanted }
+    return if (canPost) Announcement(due, emptySet()) else Announcement(emptyList(), due.map { it.id }.toSet())
 }

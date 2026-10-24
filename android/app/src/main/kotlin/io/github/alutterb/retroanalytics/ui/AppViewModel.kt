@@ -8,6 +8,7 @@ import io.github.alutterb.retroanalytics.data.Failure
 import io.github.alutterb.retroanalytics.data.Refreshed
 import io.github.alutterb.retroanalytics.data.Results
 import io.github.alutterb.retroanalytics.data.ResultsRepository
+import io.github.alutterb.retroanalytics.data.SaveResult
 import io.github.alutterb.retroanalytics.data.SortOrder
 import io.github.alutterb.retroanalytics.work.Notifier
 import kotlinx.coroutines.Job
@@ -117,12 +118,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /** Saves, then downloads with the new settings and shows the lists. */
     fun saveSettings() {
         val form = _state.value.settings
-        _state.update { it.copy(screen = Screen.LIST, failure = null) }
         viewModelScope.launch {
             refreshJob?.join()
-            val locationChanged = repository.save(form.url, form.token)
+            val locationChanged = when (val saved = repository.save(form.url, form.token)) {
+                is SaveResult.Saved -> saved.locationChanged
+                SaveResult.TokenNotStored -> {
+                    _state.update {
+                        it.copy(settings = it.settings.copy(testMessage = "Could not store the token securely on this phone. Try again."))
+                    }
+                    return@launch
+                }
+            }
             _state.update {
-                if (locationChanged) it.copy(results = null, newKeys = emptySet()) else it
+                val shown = it.copy(screen = Screen.LIST, failure = null)
+                if (locationChanged) shown.copy(results = null, newKeys = emptySet()) else shown
             }
             resetSettingsForm()
             refresh()

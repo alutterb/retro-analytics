@@ -13,15 +13,15 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import io.github.alutterb.retroanalytics.R
 import io.github.alutterb.retroanalytics.data.Direction
-import io.github.alutterb.retroanalytics.data.NewFlag
 import io.github.alutterb.retroanalytics.data.Refreshed
 import io.github.alutterb.retroanalytics.data.ResultsRepository
 import io.github.alutterb.retroanalytics.data.TokenWarning
+import io.github.alutterb.retroanalytics.data.announcement
 import io.github.alutterb.retroanalytics.data.summaryText
 import io.github.alutterb.retroanalytics.data.tokenWarning
 import io.github.alutterb.retroanalytics.ui.MainActivity
 
-/** Local notifications: one summary per download, and one warning when the token stops working. */
+/** Local notifications: one summary per download that has something to announce, and one warning when the token stops working. */
 object Notifier {
     const val EXTRA_TAB = "tab"
     private const val CHANNEL_FLAGS = "flags"
@@ -44,7 +44,7 @@ object Notifier {
      * about a rejected token; in the app the banner already says so.
      */
     fun afterRefresh(context: Context, repository: ResultsRepository, refreshed: Refreshed, background: Boolean) {
-        if (refreshed is Refreshed.Updated) newFlags(context, refreshed.newFlags)
+        if (refreshed is Refreshed.Updated) announceFlags(context, repository, refreshed)
         when (tokenWarning(refreshed, repository.rejectedTokenNotified)) {
             TokenWarning.RESET -> repository.rejectedTokenNotified = false
             TokenWarning.POST -> if (background && canPost(context)) {
@@ -55,10 +55,12 @@ object Notifier {
         }
     }
 
-    private fun newFlags(context: Context, newFlags: List<NewFlag>) {
-        if (newFlags.isEmpty()) return
-        val text = summaryText(newFlags)
-        post(context, ID_FLAGS, CHANNEL_FLAGS, "Retro price alert", text, newFlags.first().direction)
+    private fun announceFlags(context: Context, repository: ResultsRepository, refreshed: Refreshed.Updated) {
+        val due = announcement(repository.pendingKeys(), refreshed.results, refreshed.newFlags, canPost(context))
+        val posted = due.announce.isNotEmpty() &&
+            post(context, ID_FLAGS, CHANNEL_FLAGS, "Retro price alert", summaryText(due.announce), due.announce.first().direction)
+        val pending = if (due.announce.isEmpty() || posted) due.pending else due.announce.map { it.id }.toSet()
+        if (pending != repository.pendingKeys()) repository.setPendingKeys(pending)
     }
 
     private fun tokenRejected(context: Context) {
@@ -73,8 +75,8 @@ object Notifier {
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
 
-    private fun post(context: Context, id: Int, channel: String, title: String, text: String, tab: Direction?) {
-        if (!canPost(context)) return
+    private fun post(context: Context, id: Int, channel: String, title: String, text: String, tab: Direction?): Boolean {
+        if (!canPost(context)) return false
         val intent = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             .apply { tab?.let { putExtra(EXTRA_TAB, it.name) } }
@@ -91,8 +93,9 @@ object Notifier {
             .build()
         try {
             NotificationManagerCompat.from(context).notify(id, notification)
+            return true
         } catch (e: SecurityException) {
-            // Permission withdrawn between the check and the post.
+            return false
         }
     }
 }
