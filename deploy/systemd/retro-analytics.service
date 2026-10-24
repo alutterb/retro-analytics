@@ -10,4 +10,10 @@ After=network-online.target
 Type=oneshot
 WorkingDirectory=%h/Documents/Projects/retro-analytics
 ExecStart=%h/.local/bin/uv run --frozen ra run
+# A full scrape takes 15-20 minutes; stop a run that hangs so later weeks still start.
+TimeoutStartSec=2h
+# To publish to the results repository (README, "Phone export and
+# publishing"), uncomment both lines:
+#EnvironmentFile=%h/.config/retro-analytics/env
+#Environment="GIT_SSH_COMMAND=ssh -i %h/.ssh/retro_analytics_data -o IdentitiesOnly=yes"
 Nice=10

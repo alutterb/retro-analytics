@@ -3,8 +3,10 @@
 Ranks retro video games by how much their complete-in-box (CIB) price on
 [PriceCharting](https://www.pricecharting.com) is forecast to grow over the
 next six months, and writes the ranking as a single HTML page you open in a
-browser. Reddit sentiment is optional and off by default; when collected, it
-only breaks ties.
+browser. It also flags which games are rising and which are crashing in price,
+and can publish those to a private GitHub repository for a phone app to read.
+Reddit sentiment is optional and off by default; when collected, it only breaks
+ties.
 
 It is a personal tool: it runs on your machine, keeps all scraped data local,
 and is meant to refresh once a week.
@@ -16,7 +18,7 @@ Requires [uv](https://docs.astral.sh/uv/). Python 3.12 or newer; development use
 ```sh
 uv sync                        # install the pinned dependencies
 uv run ra seed                 # pick the games to track (21 consoles, top 25 each, CIB >= $20)
-uv run ra run                  # scrape, forecast, rank and write the report
+uv run ra run                  # scrape, forecast, rank, write the report and the phone export
 xdg-open data/outputs/report.html
 ```
 
@@ -35,7 +37,7 @@ SNES Chrono Trigger and Genesis Sonic the Hedgehog (three page requests) into
 ./examples/three-games.sh
 ```
 
-It prints where `results.csv` and `report.html` were written.
+It prints where `results.csv`, `report.html` and `latest.json` were written.
 
 ## Output
 
@@ -48,13 +50,16 @@ It prints where `results.csv` and `report.html` were written.
 - `data/outputs/results.csv`: the same ranking as CSV, best first, with
   columns `rank, console, game, title, last_month, last_price,
   forecast_month, forecast_price, growth_pct, sentiment, sentiment_texts`.
+- `data/outputs/latest.json`: the games flagged rising or crashing (see
+  [Rising and crashing](#rising-and-crashing)), for the phone app.
 
 Forecasts are statistical extrapolations of past prices, not advice.
 
 Data is written under `data/` (or `$RA_DATA_DIR`) and the chosen model
 specifications under `models/` (or `$RA_MODELS_DIR`). Every hand-off between
 stages is a CSV file. Directories are created on first use. Both are
-gitignored: never commit price data, Reddit data or credentials.
+gitignored: never commit price data, Reddit data or credentials. Your settings
+(`data/settings.toml`) live there too.
 
 ## Pipeline stages
 
@@ -104,13 +109,113 @@ Each stage is a `ra` subcommand and reads the files the previous one wrote.
    Reddit data count as neutral and are never dropped.
 8. `ra report` (`report.py`): writes `data/outputs/report.html` from the
    ranking, the monthly series and the forecasts.
+9. `ra export` (`flags.py`, `export.py`): flags rising and crashing games and
+   writes them to `data/outputs/latest.json`.
+10. `ra publish` (`publish.py`): commits `latest.json` to the private results
+    repository set in `data/settings.toml`; does nothing when none is set.
 
-`ra run` runs scrape, prep, train, forecast, rank and report in order on the
-games already seeded, price-only. `ra run --sentiment` also runs the sentiment
+`ra run` runs scrape, prep, train, forecast, rank, report, export and publish
+in order on the games already seeded, price-only. `ra run --sentiment` also runs the sentiment
 stage before ranking, and `ra run --game console/slug` (repeatable) re-seeds
 exactly those games first. If some games fail to scrape it still ranks the rest, then
-exits non-zero. Any stage whose input is missing exits non-zero and names the
+exits non-zero; a failed publish likewise leaves the local export in place
+and exits non-zero after every other stage has run. Any stage whose input is missing exits non-zero and names the
 stage to run first.
+
+## Rising and crashing
+
+`ra export` flags a game **rising** when its forecast growth, or its actual
+CIB price change over the last 1, 3 or 6 months, is at or above that signal's
+rising threshold, and **crashing** when one is at or below its crashing
+threshold. A game can be both, for example one that fell 12% last month but is
+forecast to recover. Each flag keeps its reason ("down 20% in 3 months",
+"forecast up 15% in 6 months"). A window the game has too little history for
+is skipped, not counted as no change.
+
+The defaults:
+
+| Signal | Rising at or above | Crashing at or below |
+|---|---|---|
+| Forecast growth (6 months) | +10% | -10% |
+| Change over 1 month | +15% | -10% |
+| Change over 3 months | +25% | -15% |
+| Change over 6 months | +40% | -25% |
+
+To change any of them, copy `examples/settings.toml` to `data/settings.toml`
+(or `$RA_DATA_DIR/settings.toml`) and edit it. Every key is optional; an
+unknown key is an error so a typo cannot silently keep a default.
+
+```toml
+[rising]
+forecast_pct = 10
+change_1m_pct = 15
+
+[crashing]
+change_3m_pct = -20
+```
+
+`data/outputs/latest.json` holds only flagged games. Each has its console,
+title, PriceCharting link, latest CIB price and month, its 1/3/6-month
+changes, the six-month forecast, the last 24 monthly prices and its flags,
+next to the thresholds used and a `schema_version` (currently 1) the app
+checks.
+
+## Phone export and publishing
+
+A phone app reads `latest.json` from a private GitHub repository. To have `ra run` (and so the weekly timer) publish it there, add a
+`[publish]` table to `data/settings.toml`:
+
+```toml
+[publish]
+repo = "git@github.com:alutterb/retro-analytics-data.git"
+branch = "main"                 # default
+path = "results/latest.json"    # default
+```
+
+`ra publish` does the same on its own. It clones the branch into a temporary
+directory under `data/`, replaces the file and pushes one commit, and skips
+the commit when only the generation date changed. Before any git command it
+asks the GitHub CLI whether the repository is private and refuses to publish
+when it is public, is not on GitHub, carries credentials in its URL, or its
+visibility cannot be checked. PriceCharting's prices are for personal use, so
+keep this repository private.
+
+The weekly timer can run before you log in (with linger, or catching up at
+boot), when the desktop keyring that `gh auth login` normally stores its token
+in is still locked. Give it credentials that need no session or prompt:
+
+1. A token for the privacy check. Create a fine-grained GitHub token with
+   read-only access to `retro-analytics-data` (the same kind the phone app
+   uses; Metadata and Contents read are enough) and store it where only you
+   can read it:
+
+   ```sh
+   mkdir -p ~/.config/retro-analytics
+   printf 'GH_TOKEN=%s\n' 'github_pat_...' > ~/.config/retro-analytics/env
+   chmod 600 ~/.config/retro-analytics/env
+   ```
+
+   then uncomment the `EnvironmentFile=` line in
+   `deploy/systemd/retro-analytics.service`.
+2. A deploy key for pushing, limited to the results repository:
+
+   ```sh
+   ssh-keygen -t ed25519 -N "" -f ~/.ssh/retro_analytics_data
+   gh repo deploy-key add ~/.ssh/retro_analytics_data.pub \
+     --repo alutterb/retro-analytics-data --allow-write --title retro-analytics
+   ```
+
+   then uncomment the `Environment=GIT_SSH_COMMAND=...` line in
+   `deploy/systemd/retro-analytics.service` before installing it, so only the
+   timer uses that key. Runs from your own shell keep using your usual
+   credentials.
+
+Git and gh calls time out (5 minutes and 1 minute) and never prompt, so a
+stalled network or a missing credential fails the publish instead of hanging
+the timer.
+
+Commits use your git identity (`git config --global user.name` and
+`user.email`).
 
 ## Weekly refresh
 
@@ -162,8 +267,10 @@ points, so it cannot outweigh a real price difference.
 The scraper is for private use. It sends one request at a time, waits 1-2 s
 between requests, identifies itself with a descriptive User-Agent, times out
 after 30 s and backs off on errors. PriceCharting's terms treat its current and
-historical prices as its property, so keep scraped data local: don't commit
-it, publish it or serve the report from a public site. The report credits and
+historical prices as its property, so keep scraped data to yourself: don't
+commit it to this repository, publish it or serve the report from a public
+site. The only place `ra publish` sends it is your own private results
+repository. The report credits and
 links PriceCharting. Tests run on trimmed copies of real pages in
 `tests/fixtures/` whose prices were replaced with made-up values.
 
@@ -179,7 +286,9 @@ local test server. CI runs them on Python 3.12 and 3.13.
 
 - `src/retro_analytics/`: the package. `paths.py` holds every file location;
   `cli.py` is the `ra` entry point; `pipeline.py` chains the stages;
-  `report.py` renders the HTML page.
+  `report.py` renders the HTML page; `settings.py` reads `settings.toml`;
+  `flags.py`, `export.py` and `publish.py` produce and publish the phone
+  export.
 - `tests/`: the pytest suite and its HTML fixtures.
 - `examples/`: the three-game end-to-end example.
 - `deploy/systemd/`: the weekly timer.

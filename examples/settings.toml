@@ -1,0 +1,23 @@
+# Copy to data/settings.toml (or $RA_DATA_DIR/settings.toml) and edit.
+# Every key is optional; a missing key keeps the default shown here.
+# Percentages: a game is rising when a value is at or above its rising
+# threshold, and crashing when it is at or below its crashing threshold.
+
+[rising]
+forecast_pct = 10     # forecast growth over the next 6 months
+change_1m_pct = 15    # realized price change over the last month
+change_3m_pct = 25    # ... over the last 3 months
+change_6m_pct = 40    # ... over the last 6 months
+
+[crashing]
+forecast_pct = -10
+change_1m_pct = -10
+change_3m_pct = -15
+change_6m_pct = -25
+
+# Remove this table to turn publishing off. The repository must be private:
+# publishing refuses any repository GitHub does not report as private.
+[publish]
+repo = "git@github.com:alutterb/retro-analytics-data.git"
+branch = "main"
+path = "results/latest.json"
