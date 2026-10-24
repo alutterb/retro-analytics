@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import androidx.core.content.edit
 import java.security.GeneralSecurityException
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -23,7 +24,7 @@ class TokenStore(context: Context) {
 
     var resultsUrl: String
         get() = prefs.getString(KEY_URL, null) ?: DEFAULT_RESULTS_URL
-        set(value) = prefs.edit().putString(KEY_URL, value.trim()).apply()
+        set(value) = prefs.edit { putString(KEY_URL, value.trim()) }
 
     val hasToken: Boolean get() = token() != null
 
@@ -47,13 +48,13 @@ class TokenStore(context: Context) {
         cipher.init(Cipher.ENCRYPT_MODE, key())
         val data = cipher.doFinal(token.trim().toByteArray(Charsets.UTF_8))
         val sealed = listOf(cipher.iv, data).joinToString(":") { Base64.encodeToString(it, Base64.NO_WRAP) }
-        prefs.edit().putString(KEY_TOKEN, sealed).apply()
+        prefs.edit { putString(KEY_TOKEN, sealed) }
     }
 
     /** Whether the owner was already told the background refresh is rejecting the token. */
     var tokenWarningShown: Boolean
         get() = prefs.getBoolean(KEY_WARNED, false)
-        set(value) = prefs.edit().putBoolean(KEY_WARNED, value).apply()
+        set(value) = prefs.edit { putBoolean(KEY_WARNED, value) }
 
     private fun key(): SecretKey {
         val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
