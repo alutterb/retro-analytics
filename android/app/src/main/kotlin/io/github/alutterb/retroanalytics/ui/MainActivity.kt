@@ -32,13 +32,20 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Notifier.createChannels(this)
         RefreshWorker.schedule(this)
-        openTabFrom(intent)
+        // On recreation (rotation) the view model already holds the screen; don't replay the launch intent.
+        if (savedInstanceState == null) openTabFrom(intent)
         setContent { RetroTheme { App(model) } }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         openTabFrom(intent)
+        model.refresh()
+    }
+
+    override fun onRestart() {
+        super.onRestart()
+        model.refresh()
     }
 
     private fun openTabFrom(intent: Intent?) {

@@ -18,5 +18,7 @@ class LocationTest {
         assertFalse(isAllowedResultsUrl("https://evil.example/?https://api.github.com/"))
         assertFalse(isAllowedResultsUrl("https://user@api.github.com/repos/me/data/contents/out.json"))
         assertFalse(isAllowedResultsUrl("not a url"))
+        assertFalse(isAllowedResultsUrl("https://api.github.com:8443/repos/me/data/contents/out.json"))
+        assertTrue(isAllowedResultsUrl("  $DEFAULT_RESULTS_URL  "))
     }
 }

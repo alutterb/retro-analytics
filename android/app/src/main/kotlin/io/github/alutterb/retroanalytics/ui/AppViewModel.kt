@@ -10,6 +10,7 @@ import io.github.alutterb.retroanalytics.data.Results
 import io.github.alutterb.retroanalytics.data.ResultsRepository
 import io.github.alutterb.retroanalytics.data.SortOrder
 import io.github.alutterb.retroanalytics.work.Notifier
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,6 +45,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _state: MutableStateFlow<UiState>
     val state: StateFlow<UiState>
+    private var refreshJob: Job? = null
 
     init {
         val hasToken = repository.hasToken
@@ -59,19 +61,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (hasToken) refresh()
     }
 
+    /** Downloads now; also picks up anything the background worker cached meanwhile. */
     fun refresh() {
-        if (_state.value.loading) return
+        if (refreshJob?.isActive == true) return
         _state.update { it.copy(loading = true) }
-        viewModelScope.launch {
+        refreshJob = viewModelScope.launch {
             val refreshed = repository.refresh()
-            Notifier.afterRefresh(getApplication(), repository, refreshed)
+            Notifier.afterRefresh(getApplication(), repository, refreshed, background = false)
+            val cached = repository.cached()
+            val newKeys = repository.newKeys()
             _state.update {
                 when (refreshed) {
-                    is Refreshed.Updated -> it.copy(
-                        loading = false, failure = null, results = refreshed.results,
-                        newKeys = refreshed.newFlags.map { flag -> flag.id }.toSet(),
+                    is Refreshed.Updated -> it.copy(loading = false, failure = null, results = refreshed.results, newKeys = newKeys)
+                    is Refreshed.Failed -> it.copy(
+                        loading = false, failure = refreshed.failure, results = cached ?: it.results, newKeys = newKeys,
                     )
-                    is Refreshed.Failed -> it.copy(loading = false, failure = refreshed.failure)
                 }
             }
         }
@@ -113,16 +117,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /** Saves, then downloads with the new settings and shows the lists. */
     fun saveSettings() {
         val form = _state.value.settings
-        val locationChanged = repository.save(form.url, form.token)
-        _state.update {
-            it.copy(
-                screen = Screen.LIST, failure = null,
-                results = if (locationChanged) null else it.results,
-                newKeys = if (locationChanged) emptySet() else it.newKeys,
-            )
+        _state.update { it.copy(screen = Screen.LIST, failure = null) }
+        viewModelScope.launch {
+            refreshJob?.join()
+            val locationChanged = repository.save(form.url, form.token)
+            _state.update {
+                if (locationChanged) it.copy(results = null, newKeys = emptySet()) else it
+            }
+            resetSettingsForm()
+            refresh()
         }
-        resetSettingsForm()
-        refresh()
     }
 
     private fun resetSettingsForm() = _state.update {

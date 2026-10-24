@@ -13,11 +13,12 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import io.github.alutterb.retroanalytics.R
 import io.github.alutterb.retroanalytics.data.Direction
-import io.github.alutterb.retroanalytics.data.Failure
 import io.github.alutterb.retroanalytics.data.NewFlag
 import io.github.alutterb.retroanalytics.data.Refreshed
 import io.github.alutterb.retroanalytics.data.ResultsRepository
+import io.github.alutterb.retroanalytics.data.TokenWarning
 import io.github.alutterb.retroanalytics.data.summaryText
+import io.github.alutterb.retroanalytics.data.tokenWarning
 import io.github.alutterb.retroanalytics.ui.MainActivity
 
 /** Local notifications: one summary per download, and one warning when the token stops working. */
@@ -38,17 +39,19 @@ object Notifier {
         )
     }
 
-    /** After any download, from the worker or the app: announce new flags, or warn once about a rejected token. */
-    fun afterRefresh(context: Context, repository: ResultsRepository, refreshed: Refreshed) {
-        when (refreshed) {
-            is Refreshed.Updated -> {
-                if (repository.rejectedTokenNotified) repository.rejectedTokenNotified = false
-                newFlags(context, refreshed.newFlags)
-            }
-            is Refreshed.Failed -> if (refreshed.failure == Failure.BAD_TOKEN && !repository.rejectedTokenNotified) {
+    /**
+     * After any download: announce new flags. Only the background worker warns
+     * about a rejected token; in the app the banner already says so.
+     */
+    fun afterRefresh(context: Context, repository: ResultsRepository, refreshed: Refreshed, background: Boolean) {
+        if (refreshed is Refreshed.Updated) newFlags(context, refreshed.newFlags)
+        when (tokenWarning(refreshed, repository.rejectedTokenNotified)) {
+            TokenWarning.RESET -> repository.rejectedTokenNotified = false
+            TokenWarning.POST -> if (background && canPost(context)) {
                 repository.rejectedTokenNotified = true
                 tokenRejected(context)
             }
+            TokenWarning.NONE -> Unit
         }
     }
 
@@ -65,11 +68,13 @@ object Notifier {
         )
     }
 
-    private fun post(context: Context, id: Int, channel: String, title: String, text: String, tab: Direction?) {
-        val allowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+    private fun canPost(context: Context): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
-        if (!allowed) return
+
+    private fun post(context: Context, id: Int, channel: String, title: String, text: String, tab: Direction?) {
+        if (!canPost(context)) return
         val intent = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             .apply { tab?.let { putExtra(EXTRA_TAB, it.name) } }
@@ -84,6 +89,10 @@ object Notifier {
             .setContentIntent(pending)
             .setAutoCancel(true)
             .build()
-        NotificationManagerCompat.from(context).notify(id, notification)
+        try {
+            NotificationManagerCompat.from(context).notify(id, notification)
+        } catch (e: SecurityException) {
+            // Permission withdrawn between the check and the post.
+        }
     }
 }

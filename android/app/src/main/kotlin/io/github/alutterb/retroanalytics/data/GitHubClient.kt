@@ -19,6 +19,7 @@ enum class Failure(val message: String, val fixInSettings: Boolean) {
     SERVER("GitHub returned an error; try again later", false),
     NOT_UNDERSTOOD("The results file could not be read", false),
     UNSUPPORTED("The results file is newer than this app; update the app", false),
+    STORAGE("Could not save the results file on this phone", false),
 }
 
 /** The token is only ever sent to the GitHub API over https. */
@@ -39,11 +40,14 @@ object GitHubClient {
     fun fetch(url: String, token: String): Fetched {
         val target = url.trim()
         if (!isAllowedResultsUrl(target)) return Fetched.Failed(Failure.BAD_LOCATION)
-        val connection = URL(target).openConnection() as HttpURLConnection
+        var connection: HttpURLConnection? = null
         return try {
+            connection = URL(target).openConnection() as HttpURLConnection
+            // The token goes to api.github.com only; a redirect elsewhere is treated as an error.
+            connection.instanceFollowRedirects = false
             connection.connectTimeout = 15_000
             connection.readTimeout = 30_000
-            connection.setRequestProperty("Authorization", "Bearer $token")
+            connection.setRequestProperty("Authorization", "Bearer ${token.trim()}")
             connection.setRequestProperty("Accept", "application/vnd.github.raw+json")
             connection.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
             when (connection.responseCode) {
@@ -54,8 +58,11 @@ object GitHubClient {
             }
         } catch (e: IOException) {
             Fetched.Failed(Failure.NO_NETWORK)
+        } catch (e: IllegalArgumentException) {
+            // A pasted token with characters a header cannot carry.
+            Fetched.Failed(Failure.BAD_TOKEN)
         } finally {
-            connection.disconnect()
+            connection?.disconnect()
         }
     }
 }

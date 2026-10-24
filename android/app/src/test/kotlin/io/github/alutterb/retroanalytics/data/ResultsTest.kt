@@ -63,6 +63,13 @@ class ResultsTest {
     }
 
     @Test
+    fun nonNumericSchemaVersionOrNonObjectRootIsInvalid() {
+        assertTrue(parseResults("""{"schema_version":"one","games":[]}""") is ParseResult.Invalid)
+        assertTrue(parseResults("[]") is ParseResult.Invalid)
+        assertTrue(parseResults("\"x\"") is ParseResult.Invalid)
+    }
+
+    @Test
     fun missingSchemaVersionIsInvalid() {
         assertTrue(parseResults("""{"games":[]}""") is ParseResult.Invalid)
     }

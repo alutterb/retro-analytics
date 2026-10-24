@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val repository = ResultsRepository(applicationContext)
-        Notifier.afterRefresh(applicationContext, repository, repository.refresh())
+        Notifier.afterRefresh(applicationContext, repository, repository.refresh(), background = true)
         return Result.success()
     }
 
