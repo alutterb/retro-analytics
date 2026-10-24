@@ -157,6 +157,13 @@ uv run ra run --sentiment
 Sentiment only reorders games whose forecast growth is equal to 0.1 percentage
 points, so it cannot outweigh a real price difference.
 
+## Android app
+
+`android/` holds a personal Android app that shows the rising and crashing
+games on your phone. It downloads the results file `ra run` publishes to your
+private results repository; see [android/README.md](android/README.md) to
+build it, install it and paste in a read-only token.
+
 ## PriceCharting etiquette
 
 The scraper is for private use. It sends one request at a time, waits 1-2 s
