@@ -9,6 +9,7 @@ the games, prices or thresholds changed.
 """
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -47,7 +48,7 @@ def check_private(url):
         raise PublishError(f"publish.repo {url} is not a GitHub repository; only GitHub repositories can be "
                            "checked for privacy, so publishing is refused")
     try:
-        result = subprocess.run(['gh', 'repo', 'view', repo, '--json', 'isPrivate', '--jq', '.isPrivate'],
+        result = subprocess.run(['gh', 'repo', 'view', f'github.com/{repo}', '--json', 'isPrivate', '--jq', '.isPrivate'],
                                 capture_output=True, text=True, timeout=60)
     except FileNotFoundError as e:
         raise PublishError(f"cannot confirm {repo} is private: the GitHub CLI (gh) is not installed") from e
@@ -59,8 +60,17 @@ def check_private(url):
         raise PublishError(f"refusing to publish to {repo}: it is not private")
 
 
+GIT_TIMEOUT = 300
+
+
 def _git(*args, cwd=None):
-    result = subprocess.run(['git', *args], cwd=cwd, capture_output=True, text=True)
+    try:
+        result = subprocess.run(['git', *args], cwd=cwd, capture_output=True, text=True, timeout=GIT_TIMEOUT,
+                                env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'})
+    except subprocess.TimeoutExpired as e:
+        raise PublishError(f"git {args[0]} timed out after {GIT_TIMEOUT} s") from e
+    except OSError as e:
+        raise PublishError(f"git {args[0]} could not run: {e}") from e
     if result.returncode != 0:
         raise PublishError(f"git {args[0]} failed: {_last_line(result.stderr)}")
     return result.stdout

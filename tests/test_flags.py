@@ -64,6 +64,17 @@ def test_threshold_is_inclusive():
     assert flagged[("nes", "zelda")]["reasons"][0]["text"] == "forecast down 10% in 6 months"
 
 
+def test_rising_threshold_is_inclusive_too():
+    flagged = flag(series_of("nes", "zelda", [100.0] * 7), results_of(("nes", "zelda", 10.0)))
+    assert [(r["direction"], r["signal"]) for r in flagged[("nes", "zelda")]["reasons"]] == [("rising", "forecast")]
+
+
+def test_six_month_change_alone_can_flag():
+    series = series_of("nes", "zelda", [100.0, 120.0, 125.0, 130.0, 135.0, 138.0, 140.0])
+    reasons = flag(series, results_of(("nes", "zelda", 0.0)))[("nes", "zelda")]["reasons"]
+    assert [(r["signal"], r["text"]) for r in reasons] == [("change_6m", "up 40% in 6 months")]
+
+
 def test_quiet_game_is_not_flagged():
     series = series_of("nes", "zelda", [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0])
     assert flag(series, results_of(("nes", "zelda", 3.0))) == {}

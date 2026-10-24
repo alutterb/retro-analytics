@@ -180,10 +180,23 @@ when it is public, is not on GitHub, carries credentials in its URL, or its
 visibility cannot be checked. PriceCharting's prices are for personal use, so
 keep this repository private.
 
-The weekly timer runs without a login session, so give it credentials that
-need no prompt:
+The weekly timer can run before you log in (with linger, or catching up at
+boot), when the desktop keyring that `gh auth login` normally stores its token
+in is still locked. Give it credentials that need no session or prompt:
 
-1. `gh auth login` once, so the privacy check works.
+1. A token for the privacy check. Create a fine-grained GitHub token with
+   read-only access to `retro-analytics-data` (the same kind the phone app
+   uses; Metadata and Contents read are enough) and store it where only you
+   can read it:
+
+   ```sh
+   mkdir -p ~/.config/retro-analytics
+   printf 'GH_TOKEN=%s\n' 'github_pat_...' > ~/.config/retro-analytics/env
+   chmod 600 ~/.config/retro-analytics/env
+   ```
+
+   then uncomment the `EnvironmentFile=` line in
+   `deploy/systemd/retro-analytics.service`.
 2. A deploy key for pushing, limited to the results repository:
 
    ```sh
@@ -196,6 +209,10 @@ need no prompt:
    `deploy/systemd/retro-analytics.service` before installing it, so only the
    timer uses that key. Runs from your own shell keep using your usual
    credentials.
+
+Git and gh calls time out (5 minutes and 1 minute) and never prompt, so a
+stalled network or a missing credential fails the publish instead of hanging
+the timer.
 
 Commits use your git identity (`git config --global user.name` and
 `user.email`).

@@ -29,7 +29,8 @@ def realized_changes(prices):
     changes = {}
     for k in WINDOWS:
         start = latest_month - pd.DateOffset(months=k)
-        changes[k] = (latest / prices[start] - 1) * 100 if start in prices.index else None
+        # Rounded so an exact move such as 100 -> 140 meets a 40% threshold despite float error.
+        changes[k] = round((latest / prices[start] - 1) * 100, 6) if start in prices.index else None
     return changes
 
 

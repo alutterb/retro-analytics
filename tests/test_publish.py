@@ -107,6 +107,23 @@ def test_unreachable_remote_raises_and_keeps_the_local_export(remote, tmp_path):
     assert paths.export().exists()
 
 
+def test_git_that_hangs_fails_the_publish(remote, monkeypatch):
+    def hang(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], kwargs.get("timeout"))
+    monkeypatch.setattr(publish.subprocess, "run", hang)
+    write_export()
+    with pytest.raises(publish.PublishError, match="timed out"):
+        publish.main()
+
+
+def test_missing_git_fails_the_publish(remote, tmp_path, monkeypatch):
+    (tmp_path / "empty").mkdir()
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    write_export()
+    with pytest.raises(publish.PublishError, match="could not run"):
+        publish.main()
+
+
 def test_missing_export_names_the_stage(remote):
     with pytest.raises(publish.PipelineError, match="run `ra export` first"):
         publish.main()
@@ -127,13 +144,13 @@ def test_public_repository_is_refused(tmp_path, monkeypatch):
 
 
 def test_private_repository_passes(tmp_path, monkeypatch):
-    fake_gh(tmp_path, monkeypatch, 'test "$3" = alutterb/retro-analytics-data && echo true')
+    fake_gh(tmp_path, monkeypatch, 'test "$3" = github.com/alutterb/retro-analytics-data && echo true')
     publish.check_private(TARGET)
 
 
 def test_failing_gh_is_refused(tmp_path, monkeypatch):
     fake_gh(tmp_path, monkeypatch, "echo 'not logged in' >&2; exit 1")
-    with pytest.raises(publish.PublishError, match="private"):
+    with pytest.raises(publish.PublishError, match="gh failed"):
         publish.check_private(TARGET)
 
 
