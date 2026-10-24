@@ -64,7 +64,9 @@ fun ListScreen(state: UiState, model: AppViewModel, modifier: Modifier = Modifie
             }
         }
         Controls(results, state, model)
-        val games = browse(results, state.tab, state.console, state.sort)
+        val games = remember(results, state.tab, state.console, state.sort) {
+            browse(results, state.tab, state.console, state.sort)
+        }
         if (games.isEmpty()) {
             Empty(if (state.console == null) "No games flagged ${state.tab.label}" else "No games for this console")
         } else {
@@ -122,7 +124,7 @@ private fun Controls(results: Results, state: UiState, model: AppViewModel) {
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             FilterChip(selected = state.console == null, onClick = { model.filterConsole(null) }, label = { Text("All") })
-            consoles(results).forEach { console ->
+            remember(results) { consoles(results) }.forEach { console ->
                 FilterChip(
                     selected = state.console == console,
                     onClick = { model.filterConsole(console) },

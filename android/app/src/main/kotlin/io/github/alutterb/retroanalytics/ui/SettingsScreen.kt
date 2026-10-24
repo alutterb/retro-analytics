@@ -36,7 +36,7 @@ fun SettingsScreen(form: SettingsState, model: AppViewModel, onSaved: () -> Unit
         )
         OutlinedTextField(
             value = form.token,
-            onValueChange = { model.editSettings(token = it) },
+            onValueChange = model::setToken,
             label = { Text("GitHub token") },
             placeholder = { if (form.hasSavedToken) Text("Saved - type to replace") },
             singleLine = true,
@@ -46,7 +46,7 @@ fun SettingsScreen(form: SettingsState, model: AppViewModel, onSaved: () -> Unit
         )
         OutlinedTextField(
             value = form.url,
-            onValueChange = { model.editSettings(url = it) },
+            onValueChange = model::setUrl,
             label = { Text("Results location") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false),
             modifier = Modifier.fillMaxWidth(),

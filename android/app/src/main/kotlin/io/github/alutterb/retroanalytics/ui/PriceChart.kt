@@ -51,14 +51,21 @@ fun PriceChart(game: Game, modifier: Modifier = Modifier) {
                 drawLine(grid, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
             }
             val past = Path().apply {
-                history.forEachIndexed { i, v -> if (i == 0) moveTo(point(i, v).x, point(i, v).y) else lineTo(point(i, v).x, point(i, v).y) }
+                history.forEachIndexed { i, v ->
+                    val p = point(i, v)
+                    if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y)
+                }
             }
             drawPath(past, line, style = Stroke(width = 5f))
             if (forecast.isNotEmpty() && history.isNotEmpty()) {
                 val start = history.size - 1
                 val future = Path().apply {
-                    moveTo(point(start, history.last()).x, point(start, history.last()).y)
-                    forecast.forEachIndexed { i, v -> lineTo(point(start + i + 1, v).x, point(start + i + 1, v).y) }
+                    val origin = point(start, history.last())
+                    moveTo(origin.x, origin.y)
+                    forecast.forEachIndexed { i, v ->
+                        val p = point(start + i + 1, v)
+                        lineTo(p.x, p.y)
+                    }
                 }
                 drawPath(
                     future, line.copy(alpha = 0.8f),

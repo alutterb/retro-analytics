@@ -37,8 +37,9 @@ sealed interface Fetched {
 /** Downloads the raw results file through the GitHub contents API. */
 object GitHubClient {
     fun fetch(url: String, token: String): Fetched {
-        if (!isAllowedResultsUrl(url)) return Fetched.Failed(Failure.BAD_LOCATION)
-        val connection = URL(url.trim()).openConnection() as HttpURLConnection
+        val target = url.trim()
+        if (!isAllowedResultsUrl(target)) return Fetched.Failed(Failure.BAD_LOCATION)
+        val connection = URL(target).openConnection() as HttpURLConnection
         return try {
             connection.connectTimeout = 15_000
             connection.readTimeout = 30_000

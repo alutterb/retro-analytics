@@ -16,7 +16,7 @@ class ResultsStore(context: Context) {
         val temporary = File(file.parentFile, "latest.json.tmp")
         temporary.writeText(text)
         check(temporary.renameTo(file)) { "could not replace cached results" }
-        newFile.writeText(newFlags.joinToString("\n") { "${it.game.key} ${it.direction.name}" })
+        newFile.writeText(newFlags.joinToString("\n") { "${it.id.first} ${it.id.second.name}" })
     }
 
     /** Keys and directions newly flagged in the last download, for the "New" marker. */

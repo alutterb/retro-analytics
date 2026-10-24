@@ -1,6 +1,8 @@
 package io.github.alutterb.retroanalytics.data
 
-data class NewFlag(val game: Game, val direction: Direction)
+data class NewFlag(val game: Game, val direction: Direction) {
+    val id: Pair<String, Direction> get() = game.key to direction
+}
 
 /**
  * Games flagged in a direction now that were not flagged that way last time.

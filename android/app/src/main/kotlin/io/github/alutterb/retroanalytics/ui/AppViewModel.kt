@@ -9,7 +9,7 @@ import io.github.alutterb.retroanalytics.data.Refreshed
 import io.github.alutterb.retroanalytics.data.Results
 import io.github.alutterb.retroanalytics.data.ResultsRepository
 import io.github.alutterb.retroanalytics.data.SortOrder
-import io.github.alutterb.retroanalytics.work.RefreshWorker
+import io.github.alutterb.retroanalytics.work.Notifier
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,13 +28,13 @@ data class UiState(
     val console: String? = null,
     val sort: SortOrder = SortOrder.entries.first(),
     val selected: String? = null,
-    val settings: SettingsState = SettingsState(),
+    val settings: SettingsState,
 )
 
 data class SettingsState(
-    val url: String = "",
+    val url: String,
     val token: String = "",
-    val hasSavedToken: Boolean = false,
+    val hasSavedToken: Boolean,
     val testing: Boolean = false,
     val testMessage: String? = null,
 )
@@ -42,18 +42,21 @@ data class SettingsState(
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = ResultsRepository(application)
 
-    private val _state = MutableStateFlow(
-        UiState(
-            screen = if (repository.settings.hasToken) Screen.LIST else Screen.SETTINGS,
-            results = repository.store.read(),
-            newKeys = repository.store.newlyFlaggedKeys(),
-        ),
-    )
-    val state: StateFlow<UiState> = _state.asStateFlow()
+    private val _state: MutableStateFlow<UiState>
+    val state: StateFlow<UiState>
 
     init {
-        resetSettingsForm()
-        if (repository.settings.hasToken) refresh()
+        val hasToken = repository.hasToken
+        _state = MutableStateFlow(
+            UiState(
+                screen = if (hasToken) Screen.LIST else Screen.SETTINGS,
+                results = repository.cached(),
+                newKeys = repository.newKeys(),
+                settings = SettingsState(url = repository.resultsUrl, hasSavedToken = hasToken),
+            ),
+        )
+        state = _state.asStateFlow()
+        if (hasToken) refresh()
     }
 
     fun refresh() {
@@ -61,12 +64,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { it.copy(loading = true) }
         viewModelScope.launch {
             val refreshed = repository.refresh()
-            RefreshWorker.handle(getApplication(), repository, refreshed)
+            Notifier.afterRefresh(getApplication(), repository, refreshed)
             _state.update {
                 when (refreshed) {
                     is Refreshed.Updated -> it.copy(
                         loading = false, failure = null, results = refreshed.results,
-                        newKeys = refreshed.newFlags.map { flag -> flag.game.key to flag.direction }.toSet(),
+                        newKeys = refreshed.newFlags.map { flag -> flag.id }.toSet(),
                     )
                     is Refreshed.Failed -> it.copy(loading = false, failure = refreshed.failure)
                 }
@@ -85,23 +88,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { it.copy(screen = Screen.SETTINGS) }
     }
 
-    fun editSettings(url: String? = null, token: String? = null) = _state.update {
-        it.copy(settings = it.settings.copy(url = url ?: it.settings.url, token = token ?: it.settings.token, testMessage = null))
-    }
+    fun setUrl(url: String) = _state.update { it.copy(settings = it.settings.copy(url = url, testMessage = null)) }
+    fun setToken(token: String) = _state.update { it.copy(settings = it.settings.copy(token = token, testMessage = null)) }
 
     /** Tries the values on screen without saving them. */
     fun testConnection() {
         val form = _state.value.settings
-        val token = form.token.ifBlank { repository.settings.token() }
+        val token = form.token.ifBlank { repository.savedToken() }
         if (token == null) {
             _state.update { it.copy(settings = it.settings.copy(testMessage = Failure.NO_TOKEN.message)) }
             return
         }
         _state.update { it.copy(settings = it.settings.copy(testing = true, testMessage = null)) }
         viewModelScope.launch {
-            val (results, failure) = repository.test(form.url, token)
-            val message = failure?.message
-                ?: "Connected: ${results!!.games.size} flagged games, generated ${results.generated}"
+            val message = when (val tested = repository.test(form.url, token)) {
+                is Refreshed.Failed -> tested.failure.message
+                is Refreshed.Updated ->
+                    "Connected: ${tested.results.games.size} flagged games, generated ${tested.results.generated}"
+            }
             _state.update { it.copy(settings = it.settings.copy(testing = false, testMessage = message)) }
         }
     }
@@ -109,8 +113,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /** Saves, then downloads with the new settings and shows the lists. */
     fun saveSettings() {
         val form = _state.value.settings
-        val locationChanged = form.url.trim() != repository.settings.resultsUrl
-        repository.save(form.url, form.token)
+        val locationChanged = repository.save(form.url, form.token)
         _state.update {
             it.copy(
                 screen = Screen.LIST, failure = null,
@@ -123,6 +126,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun resetSettingsForm() = _state.update {
-        it.copy(settings = SettingsState(url = repository.settings.resultsUrl, hasSavedToken = repository.settings.hasToken))
+        it.copy(settings = SettingsState(url = repository.resultsUrl, hasSavedToken = repository.hasToken))
     }
 }

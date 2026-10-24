@@ -8,8 +8,6 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import io.github.alutterb.retroanalytics.data.Failure
-import io.github.alutterb.retroanalytics.data.Refreshed
 import io.github.alutterb.retroanalytics.data.ResultsRepository
 import java.util.concurrent.TimeUnit
 
@@ -17,7 +15,7 @@ import java.util.concurrent.TimeUnit
 class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val repository = ResultsRepository(applicationContext)
-        handle(applicationContext, repository, repository.refresh())
+        Notifier.afterRefresh(applicationContext, repository, repository.refresh())
         return Result.success()
     }
 
@@ -30,22 +28,6 @@ class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorke
                 .build()
             WorkManager.getInstance(context)
                 .enqueueUniquePeriodicWork(NAME, ExistingPeriodicWorkPolicy.KEEP, request)
-        }
-
-        /** Notifications after any download, from the worker or the app. */
-        fun handle(context: Context, repository: ResultsRepository, refreshed: Refreshed) {
-            when (refreshed) {
-                is Refreshed.Updated -> {
-                    repository.settings.tokenWarningShown = false
-                    Notifier.newFlags(context, refreshed.newFlags)
-                }
-                is Refreshed.Failed -> if (refreshed.failure == Failure.BAD_TOKEN &&
-                    !repository.settings.tokenWarningShown
-                ) {
-                    repository.settings.tokenWarningShown = true
-                    Notifier.tokenRejected(context)
-                }
-            }
         }
     }
 }

@@ -4,8 +4,9 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /** The results-file version this app reads; `ra export` on the PC writes it. */
@@ -39,7 +40,7 @@ data class Game(
     val history: Series,
     val flags: List<Flag>,
 ) {
-    /** Stable identity across downloads: the same slug can exist on several consoles. */
+    /** The same slug can exist on several consoles. */
     val key: String get() = "$console/$game"
 }
 
@@ -82,19 +83,21 @@ sealed interface ParseResult {
 private val json = Json { ignoreUnknownKeys = true }
 
 fun parseResults(text: String): ParseResult {
-    val version = try {
-        json.parseToJsonElement(text).jsonObject["schema_version"]?.jsonPrimitive?.int
+    val element = try {
+        json.parseToJsonElement(text)
     } catch (e: SerializationException) {
         return ParseResult.Invalid("not valid JSON")
+    }
+    val version = try {
+        (element as? JsonObject)?.get("schema_version")?.jsonPrimitive?.int
     } catch (e: IllegalArgumentException) {
         return ParseResult.Invalid("schema_version is not a number")
     } ?: return ParseResult.Invalid("no schema_version")
     if (version != SUPPORTED_SCHEMA) return ParseResult.Unsupported(version)
     return try {
-        ParseResult.Ok(json.decodeFromString<Results>(text))
-    } catch (e: SerializationException) {
-        ParseResult.Invalid(e.message?.lineSequence()?.firstOrNull() ?: "unexpected shape")
+        ParseResult.Ok(json.decodeFromJsonElement<Results>(element))
     } catch (e: IllegalArgumentException) {
+        // SerializationException is an IllegalArgumentException.
         ParseResult.Invalid(e.message?.lineSequence()?.firstOrNull() ?: "unexpected shape")
     }
 }

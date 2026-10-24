@@ -18,6 +18,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.alutterb.retroanalytics.data.Direction
@@ -51,12 +52,12 @@ class MainActivity : ComponentActivity() {
 private fun App(model: AppViewModel) {
     val state by model.state.collectAsStateWithLifecycle()
     val askPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
-    val selected = state.results?.games?.firstOrNull { it.key == state.selected }
+    val selected = remember(state.results, state.selected) { state.results?.games?.firstOrNull { it.key == state.selected } }
     val screen = if (state.screen == Screen.DETAIL && selected == null) Screen.LIST else state.screen
+    // Settings has no way back until a token is saved.
+    val canGoBack = screen != Screen.LIST && (screen != Screen.SETTINGS || state.settings.hasSavedToken)
 
-    BackHandler(enabled = screen != Screen.LIST && (screen != Screen.SETTINGS || state.settings.hasSavedToken)) {
-        model.back()
-    }
+    BackHandler(enabled = canGoBack) { model.back() }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -70,9 +71,7 @@ private fun App(model: AppViewModel) {
                     )
                 },
                 navigationIcon = {
-                    if (screen != Screen.LIST && (screen != Screen.SETTINGS || state.settings.hasSavedToken)) {
-                        TextButton(onClick = model::back) { Text("Back") }
-                    }
+                    if (canGoBack) TextButton(onClick = model::back) { Text("Back") }
                 },
                 actions = {
                     if (screen == Screen.LIST) {

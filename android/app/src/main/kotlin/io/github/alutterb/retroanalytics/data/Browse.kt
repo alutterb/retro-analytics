@@ -15,14 +15,15 @@ fun Game.headline(direction: Direction): Flag? =
 
 /** Games flagged in `direction`, optionally on one console, in `sort` order. */
 fun browse(results: Results, direction: Direction, console: String?, sort: SortOrder): List<Game> {
-    val games = results.games.filter { game ->
-        game.headline(direction) != null && (console == null || game.console == console)
+    val moves = results.games
+        .filter { console == null || it.console == console }
+        .mapNotNull { game -> game.headline(direction)?.let { game to abs(it.valuePct) } }
+    val sorted = when (sort) {
+        SortOrder.MOVE -> moves.sortedByDescending { it.second }
+        SortOrder.PRICE -> moves.sortedByDescending { it.first.lastPrice }
+        SortOrder.TITLE -> moves.sortedBy { it.first.title.lowercase() }
     }
-    return when (sort) {
-        SortOrder.MOVE -> games.sortedByDescending { abs(it.headline(direction)!!.valuePct) }
-        SortOrder.PRICE -> games.sortedByDescending { it.lastPrice }
-        SortOrder.TITLE -> games.sortedBy { it.title.lowercase() }
-    }
+    return sorted.map { it.first }
 }
 
 fun consoles(results: Results): List<String> = results.games.map { it.console }.distinct().sorted()

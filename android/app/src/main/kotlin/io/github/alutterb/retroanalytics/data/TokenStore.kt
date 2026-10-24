@@ -13,11 +13,8 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * The GitHub token and results location.
- *
- * The token is encrypted with an AES-GCM key that lives in the Android
- * Keystore and cannot leave it; only the ciphertext is stored. Nothing here
- * logs or returns the token except to the code that sends it to GitHub.
+ * The GitHub token and results location. Only the token's ciphertext is
+ * stored; the key never leaves the Android Keystore. Never log the token.
  */
 class TokenStore(context: Context) {
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -34,7 +31,7 @@ class TokenStore(context: Context) {
         return try {
             val (iv, data) = sealed.split(':').map { Base64.decode(it, Base64.NO_WRAP) }
             val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv))
+            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
             String(cipher.doFinal(data), Charsets.UTF_8)
         } catch (e: GeneralSecurityException) {
             null
@@ -45,7 +42,7 @@ class TokenStore(context: Context) {
 
     fun saveToken(token: String) {
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, key())
+        cipher.init(Cipher.ENCRYPT_MODE, key)
         val data = cipher.doFinal(token.trim().toByteArray(Charsets.UTF_8))
         val sealed = listOf(cipher.iv, data).joinToString(":") { Base64.encodeToString(it, Base64.NO_WRAP) }
         prefs.edit { putString(KEY_TOKEN, sealed) }
@@ -56,7 +53,9 @@ class TokenStore(context: Context) {
         get() = prefs.getBoolean(KEY_WARNED, false)
         set(value) = prefs.edit { putBoolean(KEY_WARNED, value) }
 
-    private fun key(): SecretKey {
+    private val key: SecretKey by lazy { loadOrCreateKey() }
+
+    private fun loadOrCreateKey(): SecretKey {
         val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
         (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE)
