@@ -70,7 +70,7 @@ fun ListScreen(state: UiState, model: AppViewModel, modifier: Modifier = Modifie
         } else {
             LazyColumn {
                 items(games, key = { it.key }) { game ->
-                    Row(game, state.tab, (game.key to state.tab) in state.newKeys) { model.open(game.key) }
+                    GameRow(game, state.tab, (game.key to state.tab) in state.newKeys) { model.open(game.key) }
                     HorizontalDivider()
                 }
             }
@@ -142,7 +142,7 @@ private fun Controls(results: Results, state: UiState, model: AppViewModel) {
 }
 
 @Composable
-private fun Row(game: Game, direction: Direction, isNew: Boolean, onClick: () -> Unit) {
+private fun GameRow(game: Game, direction: Direction, isNew: Boolean, onClick: () -> Unit) {
     val flag = game.headline(direction) ?: return
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
