@@ -136,3 +136,12 @@ credentials/
 
 # trained models
 models/
+# Android build output and machine-local settings
+android/.gradle/
+android/.kotlin/
+android/local.properties
+# The top-level data/ rule is for price data, not Kotlin packages.
+!android/app/src/**/data/
+android/**/build/
+*.apk
+*.keystore
