@@ -12,7 +12,9 @@ file and shows it.
   the six-month forecast (dashed), the 1-, 3- and 6-month changes and why
   the game was flagged.
 - A notification when a download flags a game that was not flagged that way
-  before. The first download after setup notifies nothing.
+  before, as one summary. While notifications are not allowed, those games
+  wait and are announced at the first download after you allow them. The
+  first download after setup notifies nothing.
 - Works offline with the last file it downloaded.
 
 It is for your own phone only: no Play Store, no other users, and the prices
@@ -108,8 +110,8 @@ whatever the PC flagged.
   token store, the cache and the refresh path.
 - `app/src/main/kotlin/.../work/`: the daily WorkManager job and notifications.
 - `app/src/main/kotlin/.../ui/`: the Compose screens.
-- `app/src/test/`: JVM unit tests for parsing, newly-flagged detection, the
-  location check and list sorting (`./gradlew test`).
+- `app/src/test/`: JVM unit tests for parsing, newly-flagged detection and
+  pending announcements, the location check and list sorting (`./gradlew test`).
 
 The app reads results-file schema version 1 and ignores fields it does not
 use. A file with any other version shows "update the app" and keeps the
