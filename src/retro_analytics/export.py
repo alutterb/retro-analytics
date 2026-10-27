@@ -1,9 +1,11 @@
 """Write the flagged games as one JSON file a phone can download.
 
 The file holds only the games flagged rising or crashing, each with enough
-history and forecast to draw a chart. Its shape is versioned by
-``schema_version``; the Android app reads version 1, so later changes add
-fields or bump the version.
+history and forecast to draw a chart. A game that recently crashed while the
+forecast points up also carries a ``rebound`` flag shaped like the entries in
+``flags``; it is a separate field so a reader that predates it still sees only
+rising and crashing flags. Its shape is versioned by ``schema_version``; the
+Android app reads version 1, so later changes add fields or bump the version.
 """
 
 import json
@@ -60,6 +62,7 @@ def build(results, series, forecasts, thresholds, games=None, generated=None):
                 'prices': [_money(v) for v in past['price']],
             },
             'flags': [dict(reason, value_pct=_pct(reason['value_pct'])) for reason in flagged['reasons']],
+            'rebound': flagged['rebound'] and dict(flagged['rebound'], value_pct=_pct(flagged['rebound']['value_pct'])),
         })
     return {
         'schema_version': SCHEMA_VERSION,
@@ -86,4 +89,6 @@ def main():
     write(document, paths.export())
     count = {direction: sum(any(f['direction'] == direction for f in g['flags']) for g in document['games'])
              for direction in ('rising', 'crashing')}
-    print(f"Flagged {count['rising']} rising and {count['crashing']} crashing games into {paths.export()}")
+    rebounds = sum(g['rebound'] is not None for g in document['games'])
+    print(f"Flagged {count['rising']} rising, {count['crashing']} crashing and {rebounds} rebound games "
+          f"into {paths.export()}")

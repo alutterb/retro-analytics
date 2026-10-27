@@ -93,7 +93,7 @@ def test_custom_thresholds_change_the_outcome():
     series = series_of("nes", "zelda", [100.0] * 7)
     results = results_of(("nes", "zelda", 6.0))
     assert flag(series, results) == {}
-    custom = {"rising": dict(DEFAULTS["rising"], forecast_pct=5.0), "crashing": DEFAULTS["crashing"]}
+    custom = dict(DEFAULTS, rising=dict(DEFAULTS["rising"], forecast_pct=5.0))
     assert [r["signal"] for r in flag(series, results, custom)[("nes", "zelda")]["reasons"]] == ["forecast"]
 
 
@@ -102,3 +102,57 @@ def test_flagged_record_carries_changes():
     record = flag(series, results_of(("nes", "zelda", 0.0)))[("nes", "zelda")]
     assert record["changes"][1] == pytest.approx(-20.0)
     assert record["changes"][6] is None
+
+
+def rebound_of(prices, growth):
+    series = series_of("dreamcast", "vmu", prices)
+    return flag(series, results_of(("dreamcast", "vmu", growth)))[("dreamcast", "vmu")]["rebound"]
+
+
+def test_recent_crash_with_upward_forecast_is_a_rebound():
+    # Pokemon Sapphire shape: down 27% in a month, forecast +30%.
+    rebound = rebound_of([100.0, 100.0, 100.0, 73.0], 30.0)
+    assert rebound == {
+        "direction": "rebound", "signal": "change_1m", "value_pct": 30.0, "threshold_pct": 10.0,
+        "text": "down 27% in 1 month, forecast up 30% in 6 months"}
+
+
+def test_rebound_cites_the_shortest_window_that_crashed():
+    # Dreamcast VMU shape: down in every window; the 1-month drop is the most recent.
+    rebound = rebound_of([100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 57.0], 81.0)
+    assert rebound["signal"] == "change_1m"
+    assert rebound["text"] == "down 43% in 1 month, forecast up 81% in 6 months"
+    assert rebound["value_pct"] == 81.0
+
+
+def test_rebound_forecast_threshold_is_inclusive():
+    prices = [100.0, 100.0, 100.0, 80.0]
+    assert rebound_of(prices, 10.0)["value_pct"] == 10.0
+    assert rebound_of(prices, 9.9) is None
+
+
+def test_flat_forecast_after_a_crash_is_not_a_rebound():
+    assert rebound_of([100.0, 100.0, 100.0, 80.0], 0.0) is None
+
+
+def test_forecast_up_without_a_crash_is_not_a_rebound():
+    # Rising on the forecast alone, prices steady.
+    assert rebound_of([100.0] * 7, 40.0) is None
+
+
+def test_drop_short_of_the_crashing_threshold_is_not_a_rebound():
+    # Down 9% in a month misses the -10% crashing threshold; the forecast alone flags it rising.
+    series = series_of("dreamcast", "vmu", [100.0, 100.0, 100.0, 91.0])
+    assert flag(series, results_of(("dreamcast", "vmu", 50.0)))[("dreamcast", "vmu")]["rebound"] is None
+
+
+def test_long_window_crash_alone_can_rebound():
+    series = series_of("dreamcast", "vmu", [100.0, 80.0, 74.0, 74.0, 74.0, 74.0, 74.0])
+    reasons = flag(series, results_of(("dreamcast", "vmu", 20.0)))[("dreamcast", "vmu")]
+    assert reasons["rebound"]["signal"] == "change_6m"
+
+
+def test_rebound_threshold_comes_from_settings():
+    custom = dict(DEFAULTS, rebound={"forecast_pct": 50.0})
+    series = series_of("dreamcast", "vmu", [100.0, 100.0, 100.0, 80.0])
+    assert flag(series, results_of(("dreamcast", "vmu", 30.0)), custom)[("dreamcast", "vmu")]["rebound"] is None

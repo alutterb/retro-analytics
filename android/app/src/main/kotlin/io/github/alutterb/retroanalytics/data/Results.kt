@@ -14,6 +14,8 @@ const val SUPPORTED_SCHEMA = 1
 
 /**
  * The weekly results file: only games the PC flagged rising or crashing.
+ * A game that recently crashed while its forecast points up also carries a
+ * [Game.rebound] flag; files from before that field simply lack it.
  *
  * Only the fields a screen or rule reads are modelled. Everything else in the
  * file (thresholds, flag signals, horizon) is ignored like any unknown key, so
@@ -39,9 +41,13 @@ data class Game(
     val forecast: Forecast,
     val history: Series,
     val flags: List<Flag>,
+    val rebound: Flag? = null,
 ) {
     /** The same slug can exist on several consoles. */
     val key: String get() = "$console/$game"
+
+    /** Every flag the game carries, the rebound included. */
+    val allFlags: List<Flag> get() = flags + listOfNotNull(rebound)
 }
 
 @Serializable
@@ -72,6 +78,7 @@ data class Flag(
 enum class Direction(val label: String) {
     @SerialName("rising") RISING("rising"),
     @SerialName("crashing") CRASHING("crashing"),
+    @SerialName("rebound") REBOUND("rebound"),
 }
 
 sealed interface ParseResult {

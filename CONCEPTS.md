@@ -14,6 +14,9 @@ A game whose forecast growth or any realized change is at or above that signal's
 ### Crashing
 A game whose forecast growth or any realized change is at or below that signal's crashing threshold. A game can be rising and crashing at once, for example after a sharp drop that the forecast expects to recover.
 
+### Rebound
+A game that meets a crashing threshold on a realized price change (1, 3 or 6 months) while its forecast growth is at or above the rebound threshold: it recently crashed, but the model expects it to climb. It is also crashing; the rebound is a separate field in the export, ranked by forecast growth.
+
 ### Flag reason
 One condition that made a game rising or crashing: which signal, its value, the threshold it crossed, and a short sentence for people. A flagged game keeps every reason that applied.
 

@@ -18,6 +18,7 @@ def test_no_settings_file_means_defaults_and_no_publishing():
         "forecast_pct": 10.0, "change_1m_pct": 15.0, "change_3m_pct": 25.0, "change_6m_pct": 40.0}
     assert loaded.thresholds["crashing"] == {
         "forecast_pct": -10.0, "change_1m_pct": -10.0, "change_3m_pct": -15.0, "change_6m_pct": -25.0}
+    assert loaded.thresholds["rebound"] == {"forecast_pct": 10.0}
     assert loaded.publish is None
 
 
@@ -27,6 +28,19 @@ def test_one_override_keeps_the_other_defaults():
     assert loaded.thresholds["crashing"]["change_3m_pct"] == -30.0
     assert loaded.thresholds["crashing"]["change_1m_pct"] == -10.0
     assert loaded.thresholds["rising"] == settings.DEFAULT_THRESHOLDS["rising"]
+
+
+def test_rebound_threshold_can_be_overridden_and_older_files_keep_working():
+    write_settings("[rebound]\nforecast_pct = 25\n")
+    assert settings.load().thresholds["rebound"] == {"forecast_pct": 25.0}
+    write_settings("[crashing]\nchange_1m_pct = -20\n")  # no [rebound] table at all
+    assert settings.load().thresholds["rebound"] == {"forecast_pct": 10.0}
+
+
+def test_unknown_rebound_key_is_an_error():
+    write_settings("[rebound]\nchange_1m_pct = 25\n")
+    with pytest.raises(PipelineError, match="rebound.change_1m_pct"):
+        settings.load()
 
 
 def test_unknown_key_is_an_error_naming_key_and_file():

@@ -49,9 +49,10 @@ It prints where `results.csv`, `report.html` and `latest.json` were written.
   their PriceCharting page.
 - `data/outputs/results.csv`: the same ranking as CSV, best first, with
   columns `rank, console, game, title, last_month, last_price,
-  forecast_month, forecast_price, growth_pct, sentiment, sentiment_texts`.
-- `data/outputs/latest.json`: the games flagged rising or crashing (see
-  [Rising and crashing](#rising-and-crashing)), for the phone app.
+  forecast_month, forecast_price, growth_pct, sentiment, sentiment_texts,
+  rebound` (`True` for [rebound](#rebound) games).
+- `data/outputs/latest.json`: the games flagged rising or crashing, plus their
+  rebound flag (see [Rising and crashing](#rising-and-crashing)), for the phone app.
 
 Forecasts are statistical extrapolations of past prices, not advice.
 
@@ -158,7 +159,28 @@ change_3m_pct = -20
 title, PriceCharting link, latest CIB price and month, its 1/3/6-month
 changes, the six-month forecast, the last 24 monthly prices and its flags,
 next to the thresholds used and a `schema_version` (currently 1) the app
-checks.
+checks. A rebound game also has a `rebound` field shaped like a flag
+(`direction: "rebound"`, `value_pct` the forecast growth, `text` such as "down
+25% in 1 month, forecast up 81% in 6 months"), or `null`; `flags` still holds
+only rising and crashing entries, so older readers are unaffected.
+
+### Rebound
+
+A **rebound** is a game that recently crashed while the model expects it to
+climb: it meets a crashing threshold on a realized price change (1, 3 or 6
+months) and its forecast growth is at or above `[rebound] forecast_pct`
+(default +10%). A forecast-only crash does not count, since that forecast
+points down. Rebounds are ranked by forecast growth, biggest first. The
+report marks them with a badge and a "Rebound only" filter, `results.csv` has
+a `rebound` column, `ra export` prints their count, and the phone app has a
+Rebound tab and notifies when a game newly becomes one.
+
+```toml
+[rebound]
+forecast_pct = 25   # only crashes forecast to recover by 25% or more
+```
+
+A settings file without a `[rebound]` table keeps the default.
 
 ## Phone export and publishing
 

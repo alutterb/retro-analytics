@@ -2,7 +2,9 @@
 
 The page has no external files or scripts: a sortable table, a console filter
 and, per game, a sparkline of recent monthly prices followed by the dashed
-forecast. Open it from disk in any browser.
+forecast. Games that recently crashed while the forecast points up carry a
+"rebound" badge and can be filtered on their own. Open it from disk in any
+browser.
 """
 
 from datetime import date
@@ -60,6 +62,9 @@ def table_rows(results, series, forecasts, urls):
         title = escape(str(r.title))
         url = urls.get(key)
         name = f'<a href="{escape(url)}">{title}</a>' if url else title
+        rebound = bool(getattr(r, 'rebound', False))
+        if rebound:
+            name += ' <span class="badge" title="recently crashed, forecast up">rebound</span>'
         has_sentiment = pd.notna(r.sentiment)
         sentiment_cell = f"{r.sentiment:+.2f} ({r.sentiment_texts})" if has_sentiment else "–"
         cells = [
@@ -74,7 +79,8 @@ def table_rows(results, series, forecasts, urls):
         tds = ''.join(f'<td data-sort="{escape(str(sort))}">{shown}</td>' for sort, shown in cells)
         tds += f'<td>{sparkline(history.get(key, []), future.get(key, []))}</td>'
         growth = 'up' if r.growth_pct > 0 else 'down' if r.growth_pct < 0 else 'flat'
-        rows.append(f'<tr data-console="{escape(r.console)}" class="{growth}">{tds}</tr>')
+        rows.append(f'<tr data-console="{escape(r.console)}" data-rebound="{str(rebound).lower()}" '
+                    f'class="{growth}">{tds}</tr>')
     return '\n'.join(rows)
 
 
@@ -106,6 +112,8 @@ td:nth-child(1), td:nth-child(4), td:nth-child(5), td:nth-child(6), td:nth-child
 small {{ color: var(--muted); }}
 tr.up td:nth-child(6) {{ color: var(--up); }}
 tr.down td:nth-child(6) {{ color: var(--down); }}
+.badge {{ font-size: 11px; padding: 1px 6px; border-radius: 8px; color: var(--bg); background: var(--up); }}
+.controls label + label {{ margin-left: 16px; }}
 .spark polyline {{ fill: none; stroke: var(--spark); stroke-width: 1.5; }}
 .spark .future {{ stroke-dasharray: 3 2; opacity: .8; }}
 </style>
@@ -115,11 +123,13 @@ tr.down td:nth-child(6) {{ color: var(--down); }}
 <h1>Retro game price outlook</h1>
 <p>{count} games ranked by forecast complete-in-box price growth over the next {horizon} months.
 Generated {generated}. Prices from <a href="https://www.pricecharting.com">PriceCharting</a>, for private use.
-Forecasts are statistical extrapolations, not advice.</p>
+Forecasts are statistical extrapolations, not advice.
+{rebounds}</p>
 <div class="controls"><label>Console <select id="console">
 <option value="">All consoles</option>
 {options}
-</select></label></div>
+</select></label>
+<label><input type="checkbox" id="rebound"> Rebound only <small>(recently crashed, forecast up)</small></label></div>
 <div class="wrap"><table id="ranking">
 <thead><tr><th>#</th><th>Game</th><th>Console</th><th>Latest</th><th>Forecast</th><th>Growth</th><th>Sentiment</th><th>Trend</th></tr></thead>
 <tbody>
@@ -146,13 +156,25 @@ headers.forEach((th, col) => {{
     rows.forEach(row => body.appendChild(row));
   }});
 }});
-document.getElementById("console").addEventListener("change", event => {{
-  for (const row of body.rows) row.hidden = event.target.value !== "" && row.dataset.console !== event.target.value;
-}});
+const consoleFilter = document.getElementById("console");
+const reboundFilter = document.getElementById("rebound");
+function applyFilters() {{
+  for (const row of body.rows) {{
+    row.hidden = (consoleFilter.value !== "" && row.dataset.console !== consoleFilter.value)
+      || (reboundFilter.checked && row.dataset.rebound !== "true");
+  }}
+}}
+consoleFilter.addEventListener("change", applyFilters);
+reboundFilter.addEventListener("change", applyFilters);
 </script>
 </body>
 </html>
 """
+
+
+def rebound_note(results):
+    count = int(results['rebound'].sum()) if 'rebound' in results else 0
+    return f"{count} rebound game{'s' if count != 1 else ''}: recently crashed, forecast to climb." if count else ''
 
 
 def render(results, series, forecasts, games=None, generated=None):
@@ -165,6 +187,7 @@ def render(results, series, forecasts, games=None, generated=None):
         count=len(results),
         horizon=horizon,
         generated=escape(generated or date.today().isoformat()),
+        rebounds=rebound_note(results),
         options=options,
         rows=table_rows(results, series, forecasts, urls),
     )

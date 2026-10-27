@@ -1,4 +1,4 @@
-"""Owner settings: rising/crashing thresholds and the optional publish target.
+"""Owner settings: rising/crashing/rebound thresholds and the optional publish target.
 
 Settings live in ``settings.toml`` in the data directory (gitignored), so the
 weekly timer picks up a change without editing the systemd unit. A missing
@@ -11,10 +11,12 @@ from dataclasses import dataclass, fields
 
 from retro_analytics import PipelineError, paths
 
-# Percentages. Rising flags at or above, crashing at or below.
+# Percentages. Rising flags at or above, crashing at or below. A rebound is a
+# crashing price change with a forecast growth at or above rebound.forecast_pct.
 DEFAULT_THRESHOLDS = {
     'rising': {'forecast_pct': 10.0, 'change_1m_pct': 15.0, 'change_3m_pct': 25.0, 'change_6m_pct': 40.0},
     'crashing': {'forecast_pct': -10.0, 'change_1m_pct': -10.0, 'change_3m_pct': -15.0, 'change_6m_pct': -25.0},
+    'rebound': {'forecast_pct': 10.0},
 }
 
 
@@ -44,7 +46,7 @@ def load():
 
     unknown = set(raw) - set(DEFAULT_THRESHOLDS) - {'publish'}
     if unknown:
-        fail(f"unknown table(s) {', '.join(sorted(unknown))}; expected rising, crashing, publish")
+        fail(f"unknown table(s) {', '.join(sorted(unknown))}; expected rising, crashing, rebound, publish")
 
     thresholds = {}
     for direction, defaults in DEFAULT_THRESHOLDS.items():

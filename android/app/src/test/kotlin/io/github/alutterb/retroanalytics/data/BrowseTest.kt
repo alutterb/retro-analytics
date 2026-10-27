@@ -11,6 +11,8 @@ class BrowseTest {
         game("chrono", "Chrono Trigger", console = "snes", price = 300.0, flags = listOf("rising" to 30.0, "crashing" to -11.0)),
         game("sonic", "Sonic", console = "sega-genesis", price = 25.0, flags = listOf("crashing" to -12.0, "crashing" to -40.0)),
         game("metroid", "Metroid", console = "nes", price = 50.0, flags = listOf("rising" to 20.0)),
+        game("vmu", "VMU", console = "dreamcast", price = 40.0, flags = listOf("crashing" to -25.0), rebound = 81.0),
+        game("sapphire", "Pokemon Sapphire", console = "gba", price = 90.0, flags = listOf("crashing" to -27.0), rebound = 30.0),
     )
 
     private fun slugs(direction: Direction, console: String? = null, sort: SortOrder = SortOrder.MOVE) =
@@ -19,7 +21,14 @@ class BrowseTest {
     @Test
     fun gameFlaggedBothWaysIsInBothTabs() {
         assertEquals(listOf("chrono", "metroid", "zelda"), slugs(Direction.RISING))
-        assertEquals(listOf("sonic", "chrono"), slugs(Direction.CRASHING))
+        assertEquals(listOf("sonic", "sapphire", "vmu", "chrono"), slugs(Direction.CRASHING))
+    }
+
+    @Test
+    fun reboundTabListsOnlyReboundGamesBiggestForecastFirst() {
+        assertEquals(listOf("vmu", "sapphire"), slugs(Direction.REBOUND))
+        assertEquals(listOf("sapphire"), slugs(Direction.REBOUND, console = "gba"))
+        assertEquals(listOf("sapphire", "vmu"), slugs(Direction.REBOUND, sort = SortOrder.PRICE))
     }
 
     @Test
@@ -38,7 +47,7 @@ class BrowseTest {
     @Test
     fun sortByPriceIsHighestFirst() {
         assertEquals(listOf("chrono", "zelda", "metroid"), slugs(Direction.RISING, sort = SortOrder.PRICE))
-        assertEquals(listOf("chrono", "sonic"), slugs(Direction.CRASHING, sort = SortOrder.PRICE))
+        assertEquals(listOf("chrono", "sapphire", "vmu", "sonic"), slugs(Direction.CRASHING, sort = SortOrder.PRICE))
     }
 
     @Test
@@ -55,6 +64,6 @@ class BrowseTest {
 
     @Test
     fun consolesAreListedOnceInOrder() {
-        assertEquals(listOf("nes", "sega-genesis", "snes"), consoles(results))
+        assertEquals(listOf("dreamcast", "gba", "nes", "sega-genesis", "snes"), consoles(results))
     }
 }

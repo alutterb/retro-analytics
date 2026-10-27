@@ -6,7 +6,7 @@ rising and which are crashing in price. Your PC does the work: the weekly
 results file to your private results repository. The phone downloads that
 file and shows it.
 
-- Rising and Crashing tabs, a console filter, and sorting by biggest move,
+- Rising, Crashing and Rebound tabs (rebound: recently crashed, forecast up), a console filter, and sorting by biggest move,
   price or title.
 - A detail page per game with the last 24 months of complete-in-box prices,
   the six-month forecast (dashed), the 1-, 3- and 6-month changes and why
