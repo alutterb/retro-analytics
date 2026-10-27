@@ -155,6 +155,15 @@ change_1m_pct = 15
 change_3m_pct = -20
 ```
 
+`data/outputs/latest.json` holds only flagged games. Each has its console,
+title, PriceCharting link, latest CIB price and month, its 1/3/6-month
+changes, the six-month forecast, the last 24 monthly prices and its flags,
+next to the thresholds used and a `schema_version` (currently 1) the app
+checks. A rebound game also has a `rebound` field shaped like a flag
+(`direction: "rebound"`, `value_pct` the forecast growth, `text` such as "down
+25% in 1 month, forecast up 81% in 6 months"), or `null`; `flags` still holds
+only rising and crashing entries, so older readers are unaffected.
+
 ### Rebound
 
 A **rebound** is a game that recently crashed while the model expects it to
@@ -172,15 +181,6 @@ forecast_pct = 25   # only crashes forecast to recover by 25% or more
 ```
 
 A settings file without a `[rebound]` table keeps the default.
-
-`data/outputs/latest.json` holds only flagged games. Each has its console,
-title, PriceCharting link, latest CIB price and month, its 1/3/6-month
-changes, the six-month forecast, the last 24 monthly prices and its flags,
-next to the thresholds used and a `schema_version` (currently 1) the app
-checks. A rebound game also has a `rebound` field shaped like a flag
-(`direction: "rebound"`, `value_pct` the forecast growth, `text` such as "down
-25% in 1 month, forecast up 81% in 6 months"), or `null`; `flags` still holds
-only rising and crashing entries, so older readers are unaffected.
 
 ## Phone export and publishing
 
