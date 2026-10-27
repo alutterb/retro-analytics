@@ -17,15 +17,19 @@ Requires [uv](https://docs.astral.sh/uv/). Python 3.12 or newer; development use
 
 ```sh
 uv sync                        # install the pinned dependencies
-uv run ra seed                 # pick the games to track (21 consoles, top 25 each, CIB >= $20)
+uv run ra seed                 # pick the games to track (34 consoles, the best-trading 10-25 each)
 uv run ra run                  # scrape, forecast, rank, write the report and the phone export
 xdg-open data/outputs/report.html
 ```
 
-The first `ra seed` reads 21 console pages and the first `ra run` reads one
-page per tracked game (about 550 pages, 1-2 s apart, so 15-20 minutes).
+The first `ra seed` reads 34 console pages plus the page of each candidate
+game, to see how often it sells (about 1,500 pages, 1-2 s apart, so 40-60
+minutes once; the sales figures are cached for 90 days, so later re-seeds read
+only new candidates). The first `ra run` then reads one page per tracked game
+(about 690 pages, 15-20 minutes) and each weekly run after that the same 690.
 `ra seed --console nes --top 10` or `ra seed --game nes/legend-of-zelda`
-tracks fewer games.
+tracks fewer games, and `data/settings.toml` sets the console list (see
+[Rising and crashing](#rising-and-crashing)).
 
 ### Three-game example
 
@@ -67,10 +71,17 @@ gitignored: never commit price data, Reddit data or credentials. Your settings
 Each stage is a `ra` subcommand and reads the files the previous one wrote.
 
 1. `ra seed` (`pricecharting.py`): chooses which games to track and writes
-   `data/raw/games.csv`. By default it reads the console page of each of the 21
-   tracked consoles and keeps the 25 most popular games with a CIB price of at
-   least $20, skipping hardware and accessories. `--console`, `--top` and
-   `--min-price` change that; `--game nes/legend-of-zelda` (repeatable) tracks
+   `data/raw/games.csv`. For each console in `settings.toml` (by default the 21
+   original consoles plus 13 obscure ones: Atari Jaguar, Sega Saturn,
+   TurboGrafx-16, Neo Geo AES, 3DO, Virtual Boy, Atari 2600, 7800 and Lynx,
+   Master System, Game Gear, 32X and CD-i) it takes the first `candidates`
+   games on the console page with a CIB price of at least `min_price`,
+   skipping hardware and accessories, reads each candidate's page for its CIB
+   sales per day, and keeps the `top` that sell most often (page order breaks
+   ties). The figures are cached in `data/raw/volumes.json` for 90 days. The
+   defaults are 25 games from 50 candidates at $20 or more; obscure consoles
+   keep 10-15 from 30, some behind a lower floor. `--console`, `--top` and
+   `--min-price` change that for one run; `--game nes/legend-of-zelda` (repeatable) tracks
    exactly the games given without reading console pages. The file is plain
    CSV, so you can also edit it by hand. If a console page fails, that
    console's previously seeded rows are kept and the command exits non-zero.
@@ -81,7 +92,7 @@ Each stage is a `ra` subcommand and reads the files the previous one wrote.
    the page, merging it into `data/raw/prices.csv` (created on the first run).
    If `games.csv` does not exist yet, as on a fresh checkout, it first seeds it
    with the `ra seed` defaults, so `ra scrape` alone works from an empty data
-   directory (about 550 requests, so expect 15-20 minutes); if that seeding
+   directory (about 2,200 requests, so expect an hour or more); if that seeding
    selects no games, it stops with an error and writes neither file.
    `--snapshot` also records the price shown today. If any page fails or no longer has chart data, the
    other games are still saved and the command exits non-zero with a count of
@@ -144,7 +155,10 @@ The defaults:
 
 To change any of them, copy `examples/settings.toml` to `data/settings.toml`
 (or `$RA_DATA_DIR/settings.toml`) and edit it. Every key is optional; an
-unknown key is an error so a typo cannot silently keep a default.
+unknown key is an error so a typo cannot silently keep a default. The same
+file lists the tracked consoles and how many games to keep from each (the
+`[selection]` and `[consoles]` tables in the example); a `[consoles]` table
+replaces the default list, so adding a console needs no code change.
 
 ```toml
 [rising]
@@ -314,7 +328,7 @@ Tests use synthetic data and saved pages; the only network they touch is a
 local test server. CI runs them on Python 3.12 and 3.13.
 
 - `src/retro_analytics/`: the package. `paths.py` holds every file location;
-  `cli.py` is the `ra` entry point; `pipeline.py` chains the stages;
+  `cli.py` is the `ra` entry point; `pipeline.py` chains the stages; `selection.py` ranks seed candidates by sales volume;
   `report.py` renders the HTML page; `settings.py` reads `settings.toml`;
   `flags.py`, `export.py` and `publish.py` produce and publish the phone
   export.

@@ -21,6 +21,61 @@ change_6m_pct = -25
 [rebound]
 forecast_pct = 10     # forecast growth over the next 6 months that makes a crash a rebound
 
+# Which games `ra seed` tracks. On each console's PriceCharting page it takes
+# the first `candidates` games whose complete-in-box (CIB) price is at least
+# `min_price` dollars, reads each one's page for how often its CIB copy sells,
+# and keeps the `top` that sell most often. The sales figures are cached in
+# data/raw/volumes.json for 90 days, so a re-seed only reads pages it has not
+# seen lately. These are the defaults for every console below.
+[selection]
+top = 25
+min_price = 20
+candidates = 50
+
+# The consoles to track, by PriceCharting slug (the last part of
+# https://www.pricecharting.com/console/<slug>). Each takes optional `top`,
+# `min_price` and `candidates` that override [selection] for that console;
+# `nes = {}` uses [selection] as is. Add a line to track a console; remove one
+# to stop (its games leave games.csv at the next `ra seed`). If you set
+# [consoles] you must list every console you want; leave it out to track the
+# defaults below. Obscure consoles list few games that sell cheaply and
+# rarely, so they keep fewer, from a shorter list, behind a lower price floor.
+[consoles]
+nes = {}
+super-nintendo = {}
+nintendo-64 = {}
+gamecube = {}
+wii = {}
+nintendo-switch = {}
+gameboy = {}
+gameboy-color = {}
+gameboy-advance = {}
+nintendo-ds = {}
+sega-genesis = {}
+sega-cd = {}
+sega-dreamcast = {}
+playstation = {}
+playstation-2 = {}
+playstation-3 = {}
+playstation-4 = {}
+psp = {}
+xbox = {}
+xbox-360 = {}
+xbox-one = {}
+sega-saturn = { top = 15, candidates = 30 }
+turbografx-16 = { top = 15, candidates = 30 }
+neo-geo-aes = { top = 15, candidates = 30 }
+3do = { top = 10, min_price = 15, candidates = 30 }
+jaguar = { top = 10, candidates = 30 }
+virtual-boy = { top = 10, candidates = 30 }
+atari-2600 = { top = 15, min_price = 10, candidates = 30 }
+atari-7800 = { top = 10, min_price = 15, candidates = 30 }
+atari-lynx = { top = 10, min_price = 15, candidates = 30 }
+sega-master-system = { top = 15, min_price = 15, candidates = 30 }
+sega-game-gear = { top = 15, min_price = 15, candidates = 30 }
+sega-32x = { top = 10, candidates = 30 }
+cd-i = { top = 10, min_price = 10, candidates = 30 }
+
 # Remove this table to turn publishing off. The repository must be private:
 # publishing refuses any repository GitHub does not report as private.
 [publish]

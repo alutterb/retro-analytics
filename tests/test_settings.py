@@ -84,5 +84,56 @@ def test_example_file_is_the_defaults_plus_the_documented_target():
     write_settings(EXAMPLE.read_text(encoding="utf-8"))
     loaded = settings.load()
     assert loaded.thresholds == settings.DEFAULT_THRESHOLDS
+    assert loaded.selection == settings.ConsoleSelection(top=25, min_price=20.0, candidates=50)
+    assert loaded.consoles == settings.load_consoles({}, pytest.fail)[1]
     assert loaded.publish == settings.Publish(
         repo="git@github.com:alutterb/retro-analytics-data.git", branch="main", path="results/latest.json")
+
+
+def test_default_consoles_are_the_21_old_ones_plus_13_obscure_ones_with_their_own_selections():
+    loaded = settings.load()
+    assert len(loaded.consoles) == 34
+    assert loaded.selection == settings.ConsoleSelection(top=25, min_price=20.0, candidates=50)
+    assert loaded.consoles["nes"] == loaded.selection
+    assert loaded.consoles["sega-saturn"] == settings.ConsoleSelection(top=15, min_price=20.0, candidates=30)
+    assert loaded.consoles["atari-2600"] == settings.ConsoleSelection(top=15, min_price=10.0, candidates=30)
+
+
+def test_listing_consoles_replaces_the_default_list():
+    write_settings("[consoles]\nnes = {}\nsega-saturn = { top = 5, min_price = 40 }\n")
+    loaded = settings.load()
+    assert list(loaded.consoles) == ["nes", "sega-saturn"]
+    assert loaded.consoles["sega-saturn"] == settings.ConsoleSelection(top=5, min_price=40.0, candidates=50)
+
+
+def test_selection_table_sets_the_default_for_listed_consoles():
+    write_settings("[selection]\ntop = 10\nmin_price = 5\ncandidates = 20\n\n[consoles]\nnes = {}\nsnes = { top = 30 }\n")
+    consoles = settings.load().consoles
+    assert consoles["nes"] == settings.ConsoleSelection(top=10, min_price=5.0, candidates=20)
+    # Raising `top` past the candidate pool widens the pool so there is something to rank.
+    assert consoles["snes"] == settings.ConsoleSelection(top=30, min_price=5.0, candidates=30)
+
+
+@pytest.mark.parametrize("text, message", [
+    ("[selection]\ntopp = 5\n", "selection.topp"),
+    ("[selection]\ntop = 0\n", "selection.top"),
+    ("[selection]\ntop = 2.5\n", "selection.top"),
+    ('[selection]\nmin_price = "20"\n', "selection.min_price"),
+    ("[selection]\nmin_price = -1\n", "selection.min_price"),
+    ("[consoles]\n", "at least one console"),
+    ("[consoles]\nSega_Saturn = {}\n", "Sega_Saturn"),
+    ("[consoles]\nnes = 5\n", "consoles.nes"),
+    ("[consoles]\nnes = { tpo = 5 }\n", "consoles.nes.tpo"),
+    ("[consoles]\nnes = { top = 40, candidates = 20 }\n", "candidates"),
+])
+def test_bad_selection_settings_are_errors(text, message):
+    write_settings(text)
+    with pytest.raises(PipelineError, match=message):
+        settings.load()
+
+
+def test_existing_settings_without_the_new_keys_keep_working():
+    write_settings('[rising]\nforecast_pct = 12\n\n[publish]\nrepo = "git@github.com:a/b.git"\n')
+    loaded = settings.load()
+    assert loaded.thresholds["rising"]["forecast_pct"] == 12.0
+    assert len(loaded.consoles) == 34

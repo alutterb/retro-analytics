@@ -7,11 +7,20 @@ import pandas as pd
 import pytest
 import requests
 
-from retro_analytics import cli, paths, pricecharting
+from retro_analytics import cli, paths, pricecharting, settings
 
 FIXTURES = Path(__file__).parent / "fixtures"
 CONSOLE_URL = "https://www.pricecharting.com/console/nes"
 ZELDA_URL = "https://www.pricecharting.com/game/nes/legend-of-zelda"
+
+
+def choice(top=25, min_price=20.0, candidates=50):
+    return settings.ConsoleSelection(top, min_price, candidates)
+
+
+def track(*slugs):
+    """Make settings.toml track exactly these consoles with the default selection."""
+    paths.settings().write_text("[consoles]\n" + "".join(f"{slug} = {{}}\n" for slug in slugs), encoding="utf-8")
 
 
 def fixture(name):
@@ -96,19 +105,20 @@ def test_cib_history_missing_or_malformed_is_an_error(html, message):
 def test_seed_from_console_pages_writes_games_and_reports_failures():
     session = FakeSession({CONSOLE_URL: fixture("console_nes.html")})
     with pytest.raises(pricecharting.ScrapeError, match="1 of 2 console pages failed: snes"):
-        pricecharting.seed(consoles=["nes", "snes"], top=2, min_price=20, session=session)
+        pricecharting.seed(consoles={"nes": choice(top=2), "snes": choice(top=2)}, session=session)
 
     games = pd.read_csv(paths.games())
     assert list(games.columns) == pricecharting.GAME_COLUMNS
     assert games[["console", "game"]].values.tolist() == [["nes", "legend-of-zelda"], ["nes", "super-mario-bros-3"]]
-    assert session.requested == [CONSOLE_URL, "https://www.pricecharting.com/console/snes"]
+    assert [url for url in session.requested if "/console/" in url] == [
+        CONSOLE_URL, "https://www.pricecharting.com/console/snes"]
 
 
 def test_seed_keeps_previous_rows_for_failed_consoles():
     pricecharting.explicit_games(["snes/chrono-trigger", "nes/old-game"]).to_csv(paths.games(), index=False)
     session = FakeSession({CONSOLE_URL: fixture("console_nes.html")})
     with pytest.raises(pricecharting.ScrapeError, match="snes"):
-        pricecharting.seed(consoles=["nes", "snes"], top=2, min_price=20, session=session)
+        pricecharting.seed(consoles={"nes": choice(top=2), "snes": choice(top=2)}, session=session)
 
     games = pd.read_csv(paths.games())
     assert games[["console", "game"]].values.tolist() == [
@@ -165,9 +175,9 @@ def test_scrape_snapshot_adds_todays_price_and_merges_without_duplicates():
     assert not merged.duplicated(["console", "game", "date"]).any()
 
 
-def test_first_scrape_on_empty_data_dir_seeds_defaults_and_creates_prices(monkeypatch, data_dirs):
+def test_first_scrape_on_empty_data_dir_seeds_defaults_and_creates_prices(data_dirs):
     assert not (data_dirs / "data").exists()
-    monkeypatch.setattr(pricecharting, "CONSOLES", ("nes",))
+    track("nes")
     zelda_page = fixture("game_nes_legend-of-zelda.html")
     pages = {CONSOLE_URL: fixture("console_nes.html")}
     for slug in ["legend-of-zelda", "super-mario-bros-3", "mike-tyson%27s-punch-out", "metroid"]:
@@ -182,15 +192,15 @@ def test_first_scrape_on_empty_data_dir_seeds_defaults_and_creates_prices(monkey
     assert prices.groupby("game").size().tolist() == [12, 12, 12, 12]
 
 
-def test_first_scrape_writes_prices_header_even_when_every_game_fails(monkeypatch):
-    monkeypatch.setattr(pricecharting, "CONSOLES", ("nes",))
+def test_first_scrape_writes_prices_header_even_when_every_game_fails():
+    track("nes")
     with pytest.raises(pricecharting.ScrapeError, match="4 of 4 games failed"):
         pricecharting.main(session=FakeSession({CONSOLE_URL: fixture("console_nes.html")}))
     assert paths.prices().read_text().strip() == "console,game,price,date"
 
 
-def test_first_scrape_reports_failed_console_pages_after_scraping_the_rest(monkeypatch):
-    monkeypatch.setattr(pricecharting, "CONSOLES", ("nes", "sega-cd"))
+def test_first_scrape_reports_failed_console_pages_after_scraping_the_rest():
+    track("nes", "sega-cd")
     pages = {CONSOLE_URL: fixture("console_nes.html")}
     for slug in ["legend-of-zelda", "super-mario-bros-3", "mike-tyson%27s-punch-out", "metroid"]:
         pages[f"https://www.pricecharting.com/game/nes/{slug}"] = fixture("game_nes_legend-of-zelda.html")
@@ -199,8 +209,8 @@ def test_first_scrape_reports_failed_console_pages_after_scraping_the_rest(monke
     assert len(pd.read_csv(paths.prices())) == 48
 
 
-def test_first_scrape_with_no_console_pages_fails(monkeypatch):
-    monkeypatch.setattr(pricecharting, "CONSOLES", ("nes",))
+def test_first_scrape_with_no_console_pages_fails():
+    track("nes")
     with pytest.raises(pricecharting.ScrapeError, match="1 of 1 console pages failed"):
         pricecharting.main(session=FakeSession({}))
     assert not paths.games().exists()
@@ -210,7 +220,7 @@ def test_first_scrape_with_no_console_pages_fails(monkeypatch):
 def test_seed_fails_when_no_game_clears_the_price_floor():
     session = FakeSession({CONSOLE_URL: fixture("console_nes.html")})
     with pytest.raises(pricecharting.ScrapeError, match="no games selected"):
-        pricecharting.seed(consoles=("nes",), min_price=1e9, session=session)
+        pricecharting.seed(consoles={"nes": choice(min_price=1e9)}, session=session)
     assert not paths.games().exists()
 
 
