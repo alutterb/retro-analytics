@@ -8,16 +8,18 @@ import sys
 for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_var, "1")
 
+from dataclasses import replace
+
 from retro_analytics import (PipelineError, export, forecast, metrics, pipeline, pricecharting, publish, report,
-                             training)
+                             settings, training)
 
 
 def add_seed_args(parser):
     parser.add_argument('--console', action='append', dest='consoles', metavar='SLUG',
-                        help="console to seed from (repeatable; default: the 21 tracked consoles)")
-    parser.add_argument('--top', type=int, default=25, help="games per console (default: 25)")
-    parser.add_argument('--min-price', type=float, default=20.0,
-                        help="lowest CIB price in dollars to include (default: 20)")
+                        help="console to seed from (repeatable; default: the consoles in settings.toml)")
+    parser.add_argument('--top', type=int, help="games per console (default: per console in settings.toml)")
+    parser.add_argument('--min-price', type=float,
+                        help="lowest CIB price in dollars to include (default: per console in settings.toml)")
     parser.add_argument('--game', action='append', dest='games', metavar='CONSOLE/SLUG',
                         help="track exactly these games instead of reading console pages (repeatable)")
 
@@ -36,12 +38,15 @@ def add_run_args(parser):
 
 
 def seed(args):
-    pricecharting.seed(
-        consoles=args.consoles or pricecharting.CONSOLES,
-        top=args.top,
-        min_price=args.min_price,
-        games=args.games,
-    )
+    loaded = settings.load()
+    consoles = {slug: loaded.consoles.get(slug, loaded.selection) for slug in args.consoles or loaded.consoles}
+    overrides = {key: value for key, value in (('top', args.top), ('min_price', args.min_price)) if value is not None}
+    if overrides:
+        consoles = {slug: replace(choice, **overrides) for slug, choice in consoles.items()}
+        if args.top:
+            consoles = {slug: replace(choice, candidates=max(choice.candidates, args.top))
+                        for slug, choice in consoles.items()}
+    pricecharting.seed(consoles=consoles, games=args.games)
 
 
 COMMANDS = {

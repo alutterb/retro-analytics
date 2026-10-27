@@ -47,6 +47,10 @@ def games() -> Path:
     return raw("games.csv")
 
 
+def volumes() -> Path:
+    return raw("volumes.json")
+
+
 def reddit_posts() -> Path:
     return raw("reddit_posts.csv")
 

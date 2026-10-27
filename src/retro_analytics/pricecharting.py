@@ -5,9 +5,9 @@ descriptive User-Agent, and nothing scraped is ever committed or published.
 
 Two steps:
 
-- ``seed`` picks which games to track: the most popular games on each console
-  page whose CIB price is above a floor (or an explicit list of games), and
-  writes them to ``games.csv``.
+- ``seed`` picks which games to track: on each console page, the first few
+  games whose CIB price is above a floor, ranked by how often they trade (see
+  ``selection``), or an explicit list of games; it writes them to ``games.csv``.
 - ``scrape`` fetches each seeded game's page once and reads its full monthly
   CIB history from the chart data embedded in it, so a new game has years of
   history from its first run.
@@ -26,19 +26,10 @@ from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from retro_analytics import PipelineError, paths
+from retro_analytics import PipelineError, paths, selection, settings
 
 BASE_URL = "https://www.pricecharting.com"
 USER_AGENT = "retro-analytics/0.2 (personal price research; +https://github.com/alutterb/retro-analytics)"
-
-# The 21 consoles the project has always tracked, as PriceCharting URL slugs.
-CONSOLES = (
-    'nes', 'super-nintendo', 'nintendo-64', 'gamecube', 'wii', 'nintendo-switch',
-    'gameboy', 'gameboy-color', 'gameboy-advance', 'nintendo-ds',
-    'sega-genesis', 'sega-cd', 'sega-dreamcast',
-    'playstation', 'playstation-2', 'playstation-3', 'playstation-4', 'psp',
-    'xbox', 'xbox-360', 'xbox-one',
-)
 
 # Console pages also list hardware and accessories; these words in a title mark them.
 NON_GAME = re.compile(
@@ -126,7 +117,7 @@ def is_game(title):
 
 
 def select_games(rows, top, min_price):
-    """The first `top` games on the page whose CIB price is at least `min_price`."""
+    """The first `top` games on the page whose CIB price is at least `min_price`, in page order."""
     picked = [
         row for row in rows
         if is_game(row['title']) and row['cib_price'] is not None and row['cib_price'] >= min_price
@@ -184,20 +175,42 @@ def explicit_games(specs):
     return pd.DataFrame(games, columns=GAME_COLUMNS)
 
 
-def seed_games(session, consoles=CONSOLES, top=25, min_price=20.0):
-    """Pick games to track from each console page. Returns (games, failures)."""
+def seed_games(session, consoles, today=None, previous=None):
+    """Pick games to track from each console page. Returns (games, failures).
+
+    `consoles` maps a console slug to its ConsoleSelection. The first `candidates` eligible games
+    on the page are ranked by CIB sales per day and the top `top` kept. If a game's volume cannot
+    be read, that console keeps its rows from `previous` (the old games.csv), or else the first
+    `top` candidates in page order, with a warning.
+    """
+    today = today or date.today()
+    cache = selection.load_cache(today)
     games, failures = [], []
-    for console in consoles:
-        page_url = f"{BASE_URL}/console/{console}"
-        print(f"Reading {page_url}")
-        try:
-            rows = parse_console_page(session.get(page_url), page_url)
-        except (requests.RequestException, ScrapeError) as e:
-            failures.append((console, str(e)))
-            print(f"FAILED {console}: {e}")
-            continue
-        for row in select_games(rows, top, min_price):
-            games.append({'console': console, 'game': row['game'], 'title': row['title'], 'url': row['url']})
+    try:
+        for console, choice in consoles.items():
+            page_url = f"{BASE_URL}/console/{console}"
+            print(f"Reading {page_url}")
+            try:
+                rows = parse_console_page(session.get(page_url), page_url)
+            except (requests.RequestException, ScrapeError) as e:
+                failures.append((console, str(e)))
+                print(f"FAILED {console}: {e}")
+                continue
+            candidates = select_games(rows, choice.candidates, choice.min_price)
+            try:
+                chosen = selection.rank_by_volume(candidates, choice.top, session, cache, today)
+            except selection.VolumeReadError as e:
+                kept = previous[previous['console'] == console] if previous is not None else None
+                if kept is not None and len(kept):
+                    print(f"WARNING {console}: {e}; keeping its previous {len(kept)} games")
+                    games.extend(kept[GAME_COLUMNS].to_dict('records'))
+                    continue
+                print(f"WARNING {console}: {e}; using page order instead of trade volume")
+                chosen = candidates[:choice.top]
+            for row in chosen:
+                games.append({'console': console, 'game': row['game'], 'title': row['title'], 'url': row['url']})
+    finally:
+        selection.save_cache(cache)
     return pd.DataFrame(games, columns=GAME_COLUMNS), failures
 
 
@@ -244,12 +257,17 @@ def raise_on_failures(failures, total, what):
         raise ScrapeError(f"{len(failures)} of {total} {what} failed: {details}")
 
 
-def seed(consoles=CONSOLES, top=25, min_price=20.0, games=None, session=None):
-    """Write games.csv, from explicit 'console/game' specs or the console pages."""
+def seed(consoles=None, games=None, session=None):
+    """Write games.csv, from explicit 'console/game' specs or the console pages.
+
+    `consoles` maps slugs to ConsoleSelection; the default is the tracked set in settings.toml.
+    """
+    consoles = consoles or ({} if games else settings.load().consoles)
     if games:
         selected, failures = explicit_games(games), []
     else:
-        selected, failures = seed_games(session or PoliteSession(), consoles, top, min_price)
+        previous = pd.read_csv(paths.games()) if paths.games().exists() else None
+        selected, failures = seed_games(session or PoliteSession(), consoles, previous=previous)
     if failures and paths.games().exists():
         failed = {console for console, _ in failures}
         previous = pd.read_csv(paths.games())
@@ -259,21 +277,22 @@ def seed(consoles=CONSOLES, top=25, min_price=20.0, games=None, session=None):
         print(f"Seeded {len(selected)} games into {paths.games()}")
     raise_on_failures(failures, len(consoles), "console pages")
     if not len(selected):
-        raise ScrapeError("no games selected; try a lower --min-price or other consoles")
+        raise ScrapeError("no games selected; try a lower min_price or other consoles")
 
 
 def main(snapshot=False, session=None):
     """Scrape every game in games.csv into prices.csv.
 
     On a fresh checkout neither file exists yet: games.csv is first seeded from
-    the default console list, and prices.csv is created.
+    the tracked consoles in settings.toml, and prices.csv is created.
     """
     session = session or PoliteSession()
     seed_error = None
     if not paths.games().exists():
-        print(f"{paths.games()} not found; seeding from the {len(CONSOLES)} default consoles")
+        consoles = settings.load().consoles
+        print(f"{paths.games()} not found; seeding from the {len(consoles)} tracked consoles")
         try:
-            seed(consoles=CONSOLES, session=session)
+            seed(consoles=consoles, session=session)
         except ScrapeError as e:
             # Some console pages failed: scrape what was seeded, then still fail.
             if not paths.games().exists():
