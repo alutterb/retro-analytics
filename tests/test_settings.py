@@ -137,3 +137,9 @@ def test_existing_settings_without_the_new_keys_keep_working():
     loaded = settings.load()
     assert loaded.thresholds["rising"]["forecast_pct"] == 12.0
     assert len(loaded.consoles) == 34
+
+
+def test_non_numeric_console_top_is_a_settings_error():
+    write_settings('[consoles]\nnes = { top = "5" }\n')
+    with pytest.raises(PipelineError, match="consoles.nes.top"):
+        settings.load()

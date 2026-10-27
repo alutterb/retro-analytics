@@ -135,10 +135,9 @@ def load_consoles(raw, fail):
             fail(f"console {slug!r} is not a PriceCharting slug such as sega-saturn")
         if not isinstance(given, dict):
             fail(f"consoles.{slug} must be a table such as {{ top = 10 }}, got {given!r}")
-        # A console that sets only `top` keeps at least that many candidates to rank.
-        base = {**defaults, 'candidates': max(defaults['candidates'], given.get('top', 0))} \
-            if 'candidates' not in given else defaults
-        merged = load_selection(given, base, f'consoles.{slug}', fail)
+        merged = load_selection(given, defaults, f'consoles.{slug}', fail)
+        if 'candidates' not in given:
+            merged['candidates'] = max(merged['candidates'], merged['top'])
         if merged['candidates'] < merged['top']:
             fail(f"consoles.{slug}.candidates ({merged['candidates']}) must be at least top ({merged['top']})")
         selections[slug] = ConsoleSelection(merged['top'], float(merged['min_price']), merged['candidates'])
