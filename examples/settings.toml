@@ -2,6 +2,9 @@
 # Every key is optional; a missing key keeps the default shown here.
 # Percentages: a game is rising when a value is at or above its rising
 # threshold, and crashing when it is at or below its crashing threshold.
+# A game is a rebound when it is crashing on a realized price change (the 1,
+# 3 or 6 month keys below) and its forecast growth is at or above the rebound
+# threshold: it recently crashed, but the model expects it to climb.
 
 [rising]
 forecast_pct = 10     # forecast growth over the next 6 months
@@ -14,6 +17,9 @@ forecast_pct = -10
 change_1m_pct = -10
 change_3m_pct = -15
 change_6m_pct = -25
+
+[rebound]
+forecast_pct = 10     # forecast growth over the next 6 months that makes a crash a rebound
 
 # Remove this table to turn publishing off. The repository must be private:
 # publishing refuses any repository GitHub does not report as private.

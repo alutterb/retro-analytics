@@ -60,6 +60,7 @@ def test_exported_game_carries_every_field(pipeline_outputs):
     assert sonic["forecast"]["growth_pct"] == 0.0
     assert sonic["forecast"]["months"][0] == "2026-11-01"
     assert len(sonic["forecast"]["prices"]) == 6
+    assert sonic["rebound"] is None
     assert sonic["flags"][0] == {
         "direction": "crashing", "signal": "change_1m", "value_pct": -20.0, "threshold_pct": -10.0,
         "text": "down 20% in 1 month"}
@@ -100,3 +101,28 @@ def test_cli_registers_export(monkeypatch):
     monkeypatch.setattr(cli.export, "main", lambda: called.append("export"))
     cli.main(["export"])
     assert called == ["export"]
+
+
+def test_recent_crash_with_upward_forecast_exports_a_rebound(pipeline_outputs):
+    series = pd.concat([pd.read_csv(paths.series()), monthly("nes", "vmu", [100.0] * 59 + [75.0])], ignore_index=True)
+    forecasts = pd.concat([pd.read_csv(paths.forecasts()), forecast_rows("nes", "vmu", 135.0, last=75.0)],
+                          ignore_index=True)
+    series.to_csv(paths.series(), index=False)
+    forecasts.to_csv(paths.forecasts(), index=False)
+    metrics.rank(series, forecasts).to_csv(paths.results(), index=False)
+    export.main()
+    document = read_export()
+    assert document["schema_version"] == 1
+    assert document["thresholds"]["rebound"] == {"forecast_pct": 10.0}
+    vmu = next(g for g in document["games"] if g["game"] == "vmu")
+    assert vmu["rebound"] == {
+        "direction": "rebound", "signal": "change_1m", "value_pct": 80.0, "threshold_pct": 10.0,
+        "text": "down 25% in 1 month, forecast up 80% in 6 months"}
+    # The rebound is its own field: flags still hold only rising and crashing entries.
+    assert {f["direction"] for f in vmu["flags"]} == {"rising", "crashing"}
+    assert [g["game"] for g in document["games"] if g["rebound"]] == ["vmu"]
+
+
+def test_export_summary_counts_rebounds(pipeline_outputs, capsys):
+    export.main()
+    assert "1 rising, 1 crashing and 0 rebound games" in capsys.readouterr().out

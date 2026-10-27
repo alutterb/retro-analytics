@@ -31,6 +31,21 @@ class ResultsTest {
     }
 
     @Test
+    fun reboundIsAnOptionalFlagOnTheGame() {
+        val text = results(
+            game("vmu", console = "dreamcast", flags = listOf("crashing" to -25.0), rebound = 81.0),
+            game("sonic", flags = listOf("crashing" to -20.0)),
+        )
+        val (vmu, sonic) = (parseResults(text) as ParseResult.Ok).results.games
+        assertEquals(Direction.REBOUND, vmu.rebound!!.direction)
+        assertEquals(81.0, vmu.rebound!!.valuePct, 0.0)
+        assertEquals(listOf(Direction.CRASHING), vmu.flags.map { it.direction })
+        assertEquals(listOf(Direction.CRASHING, Direction.REBOUND), vmu.allFlags.map { it.direction })
+        assertNull(sonic.rebound)
+        assertEquals(listOf(Direction.CRASHING), sonic.allFlags.map { it.direction })
+    }
+
+    @Test
     fun nullableFieldsMayBeNullOrAbsent() {
         val text = results(game("zelda").replace(""""growth_pct":15.0,""", ""))
         val zelda = (parseResults(text) as ParseResult.Ok).results.games.single()

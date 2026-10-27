@@ -111,3 +111,22 @@ def test_main_writes_report_file():
 def test_main_without_results_says_which_stage_to_run():
     with pytest.raises(PipelineError, match="run `ra rank` first"):
         report.main()
+
+
+def test_rebound_games_are_badged_and_filterable():
+    results = results_frame()
+    results["rebound"] = [False, True]
+    page = BeautifulSoup(report.render(results, series_frame(), forecasts_frame()), "html.parser")
+    rows = {tr["data-console"]: tr for tr in page.select("tbody tr")}
+    assert rows["nes"]["data-rebound"] == "true"
+    assert rows["super-nintendo"]["data-rebound"] == "false"
+    assert [b.text for b in page.select(".badge")] == ["rebound"]
+    assert rows["nes"].select_one(".badge")
+    assert page.select_one("input#rebound")
+    assert "1 rebound game:" in page.p.text
+
+
+def test_results_without_a_rebound_column_still_render():
+    page = BeautifulSoup(report.render(results_frame(), series_frame(), forecasts_frame()), "html.parser")
+    assert not page.select(".badge")
+    assert "rebound game" not in page.p.text

@@ -5,6 +5,10 @@ realized price change over the last 1, 3 and 6 months. A game is rising when
 any signal is at or above its rising threshold and crashing when any is at or
 below its crashing threshold, so one game can be both (a recent drop with a
 forecast recovery). Every triggered condition is kept as a reason.
+
+A rebound is that case made explicit: a game that meets a crashing threshold
+on a realized price change and whose forecast growth is at or above the
+rebound threshold, so it recently crashed but the model expects it to climb.
 """
 
 import operator
@@ -59,8 +63,30 @@ def reasons(growth_pct, changes, thresholds, horizon=forecast.HORIZON):
     return found
 
 
+def rebound(growth_pct, found, thresholds, horizon=forecast.HORIZON):
+    """The rebound record for one game, or None.
+
+    `found` is the game's reasons. The drop shown is the shortest realized
+    window that crashed, the most recent one; `value_pct` is the forecast
+    growth, which ranks rebounds.
+    """
+    threshold = thresholds['rebound']['forecast_pct']
+    if growth_pct is None or pd.isna(growth_pct) or float(growth_pct) < threshold:
+        return None
+    drops = [r for r in found if r['direction'] == 'crashing' and r['signal'] != 'forecast']
+    if not drops:
+        return None
+    order = [f'change_{k}m' for k in WINDOWS]
+    drop = min(drops, key=lambda r: order.index(r['signal']))
+    growth = float(growth_pct)
+    return {
+        'direction': 'rebound', 'signal': drop['signal'], 'value_pct': growth, 'threshold_pct': threshold,
+        'text': f"{drop['text']}, {_text(growth, None, horizon)}",
+    }
+
+
 def flag_games(results, series, thresholds, horizon=forecast.HORIZON):
-    """Flagged games in ranking order: console, game, changes and reasons.
+    """Flagged games in ranking order: console, game, changes, reasons and rebound.
 
     `results` is the ranking (console, game, growth_pct); `series` the long
     monthly table written by `ra prep`.
@@ -74,5 +100,6 @@ def flag_games(results, series, thresholds, horizon=forecast.HORIZON):
         changes = realized_changes(prices)
         found = reasons(r.growth_pct, changes, thresholds, horizon)
         if found:
-            flagged.append({'console': r.console, 'game': r.game, 'changes': changes, 'reasons': found})
+            flagged.append({'console': r.console, 'game': r.game, 'changes': changes, 'reasons': found,
+                            'rebound': rebound(r.growth_pct, found, thresholds, horizon)})
     return flagged

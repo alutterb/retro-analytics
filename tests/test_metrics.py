@@ -92,3 +92,13 @@ def test_main_without_forecasts_says_which_stage_to_run():
     series_frame().to_csv(paths.series(), index=False)
     with pytest.raises(PipelineError, match="run `ra forecast` first"):
         metrics.main()
+
+
+def test_rank_marks_rebound_games():
+    # Sonic fell 21 -> 20 (-4.8%), not a crash; add a real crash that the forecast expects to recover.
+    series = pd.concat([series_frame(), pd.DataFrame({
+        "console": "nes", "game": "vmu", "month": ["2026-09-01", "2026-10-01"], "price": [100.0, 70.0]})])
+    final = dict(FINAL)
+    final[("nes", "vmu")] = (80.0, 90.0)  # +28.6%
+    ranked = metrics.rank(series, forecasts_frame(final)).set_index("game")
+    assert ranked["rebound"].to_dict() == {"zelda": False, "chrono": False, "sonic": False, "metroid": False, "vmu": True}

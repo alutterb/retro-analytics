@@ -9,9 +9,12 @@ enum class SortOrder(val label: String) {
     TITLE("Title"),
 }
 
-/** The flag shown on a game's row: its largest move in that direction. */
+/**
+ * The flag shown on a game's row: its largest move in that direction. For a
+ * rebound the value is the forecast growth, so the biggest rebound sorts first.
+ */
 fun Game.headline(direction: Direction): Flag? =
-    flags.filter { it.direction == direction }.maxByOrNull { abs(it.valuePct) }
+    allFlags.filter { it.direction == direction }.maxByOrNull { abs(it.valuePct) }
 
 /** Games flagged in `direction`, optionally on one console, in `sort` order. */
 fun browse(results: Results, direction: Direction, console: String?, sort: SortOrder): List<Game> {

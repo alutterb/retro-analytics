@@ -32,7 +32,7 @@ fun DetailScreen(game: Game, modifier: Modifier = Modifier) {
         )
         PriceChart(game, Modifier.fillMaxWidth())
         Text("Why it is flagged", style = MaterialTheme.typography.titleMedium)
-        game.flags.forEach { flag ->
+        game.allFlags.forEach { flag ->
             Text("- ${flag.text}", color = directionColor(flag.direction), style = MaterialTheme.typography.bodyMedium)
         }
         Text("Price changes", style = MaterialTheme.typography.titleMedium)

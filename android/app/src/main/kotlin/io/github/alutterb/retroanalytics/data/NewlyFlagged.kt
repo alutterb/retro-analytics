@@ -14,9 +14,9 @@ data class NewFlag(val game: Game, val direction: Direction) {
  */
 fun newlyFlagged(previous: Results?, current: Results): List<NewFlag> {
     if (previous == null) return emptyList()
-    val before = previous.games.flatMap { game -> game.flags.map { game.key to it.direction } }.toSet()
+    val before = previous.games.flatMap { game -> game.allFlags.map { game.key to it.direction } }.toSet()
     return current.games.flatMap { game ->
-        game.flags.map { it.direction }.distinct()
+        game.allFlags.map { it.direction }.distinct()
             .filter { (game.key to it) !in before }
             .map { NewFlag(game, it) }
     }
@@ -40,7 +40,7 @@ data class Announcement(val announce: List<NewFlag>, val pending: Set<FlagKey>)
 fun announcement(pending: Set<FlagKey>, current: Results, newFlags: List<NewFlag>, canPost: Boolean): Announcement {
     val wanted = pending + newFlags.map { it.id }
     val due = current.games.flatMap { game ->
-        game.flags.map { it.direction }.distinct().map { NewFlag(game, it) }
+        game.allFlags.map { it.direction }.distinct().map { NewFlag(game, it) }
     }.filter { it.id in wanted }
     return if (canPost) Announcement(due, emptySet()) else Announcement(emptyList(), due.map { it.id }.toSet())
 }

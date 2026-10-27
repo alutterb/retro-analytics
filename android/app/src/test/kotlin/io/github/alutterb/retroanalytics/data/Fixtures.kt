@@ -10,10 +10,13 @@ object Fixtures {
         flags: List<Pair<String, Double>> = emptyList(),
         url: String? = null,
         sixMonth: Double? = null,
+        rebound: Double? = null,
     ): String {
         val flagJson = flags.joinToString(",") { (direction, value) ->
             """{"direction":"$direction","signal":"forecast","value_pct":$value,"threshold_pct":10.0,"text":"$direction $value"}"""
         }
+        val reboundJson = if (rebound == null) "" else
+            ""","rebound":{"direction":"rebound","signal":"change_1m","value_pct":$rebound,"threshold_pct":10.0,"text":"down 12% in 1 month, forecast up $rebound% in 6 months"}"""
         val urlJson = if (url == null) "null" else "\"$url\""
         return """
             {"console":"$console","game":"$slug","title":"$title","url":$urlJson,
@@ -21,7 +24,7 @@ object Fixtures {
              "changes_pct":{"1m":-12.0,"3m":-20.0,"6m":${sixMonth ?: "null"}},
              "forecast":{"growth_pct":15.0,"months":["2026-11-01","2026-12-01"],"prices":[101.0,102.0]},
              "history":{"months":["2026-09-01","2026-10-01"],"prices":[110.0,$price]},
-             "flags":[$flagJson]}
+             "flags":[$flagJson]$reboundJson}
         """.trimIndent()
     }
 

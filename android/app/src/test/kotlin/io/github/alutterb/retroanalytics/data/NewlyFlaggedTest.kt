@@ -31,6 +31,14 @@ class NewlyFlaggedTest {
     }
 
     @Test
+    fun aCrashedGameThatStartsReboundingIsNewlyRebound() {
+        val previous = parsed(game("vmu", flags = listOf("crashing" to -25.0)))
+        val current = parsed(game("vmu", flags = listOf("crashing" to -25.0), rebound = 81.0))
+        assertEquals(listOf("vmu" to Direction.REBOUND), pairs(newlyFlagged(previous, current)))
+        assertEquals("vmu is newly rebound", summaryText(newlyFlagged(previous, current)))
+    }
+
+    @Test
     fun switchingDirectionCountsAsNew() {
         // Covers AE3.
         val previous = parsed(game("zelda", flags = listOf("rising" to 12.0)))

@@ -59,7 +59,7 @@ fun ListScreen(state: UiState, model: AppViewModel, modifier: Modifier = Modifie
                 Tab(
                     selected = state.tab == direction,
                     onClick = { model.openTab(direction) },
-                    text = { Text(if (direction == Direction.RISING) "Rising" else "Crashing") },
+                    text = { Text(direction.label.replaceFirstChar { it.uppercase() }) },
                 )
             }
         }
@@ -68,7 +68,7 @@ fun ListScreen(state: UiState, model: AppViewModel, modifier: Modifier = Modifie
             browse(results, state.tab, state.console, state.sort)
         }
         if (games.isEmpty()) {
-            Empty(if (state.console == null) "No games flagged ${state.tab.label}" else "No games for this console")
+            Empty(if (state.console == null) "No ${state.tab.label} games" else "No games for this console")
         } else {
             LazyColumn {
                 items(games, key = { it.key }) { game ->
