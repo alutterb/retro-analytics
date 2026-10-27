@@ -85,6 +85,9 @@ Each stage is a `ra` subcommand and reads the files the previous one wrote.
    exactly the games given without reading console pages. The file is plain
    CSV, so you can also edit it by hand. If a console page fails, that
    console's previously seeded rows are kept and the command exits non-zero.
+   If a candidate's sales page cannot be read, that console prints a warning
+   and keeps its previous rows (or the page-order candidates when it has none)
+   rather than rank without that game; the failed read is not cached.
    If no game is selected at all, `games.csv` is not written and the command
    exits non-zero; try a lower `--min-price` or other consoles.
 2. `ra scrape` (`pricecharting.py`): fetches each seeded game's page once and
