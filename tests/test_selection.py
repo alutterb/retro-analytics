@@ -65,12 +65,32 @@ def test_only_the_first_candidates_are_ranked():
     assert GAME_URL.format("metroid") not in session.requested   # beyond the candidate pool: never fetched
 
 
-def test_ties_and_unreadable_pages_fall_back_to_page_order():
-    # Zelda's page is dead and Metroid shows no volume: both count as 0, behind Mario's 1 per day.
-    pages = pages_with_volumes(super_mario_bros_3="1 sale per day", **{"mike_tyson%27s_punch_out": "1 sale per day"})
+def test_ties_and_games_with_no_volume_fall_back_to_page_order():
+    pages = pages_with_volumes(legend_of_zelda="no sales yet", super_mario_bros_3="1 sale per day",
+                               **{"mike_tyson%27s_punch_out": "1 sale per day"})
     pages[GAME_URL.format("metroid")] = "<html></html>"
     games, _ = pricecharting.seed_games(FakeSession(pages), {"nes": choice(top=4)}, today=TODAY)
     assert games["game"].tolist() == ["super-mario-bros-3", "mike-tyson%27s-punch-out", "legend-of-zelda", "metroid"]
+
+
+def test_unreadable_volume_page_keeps_the_previous_selection_and_is_not_cached(capsys):
+    pages = pages_with_volumes(super_mario_bros_3="9 sales per day", metroid="8 sales per day",
+                               **{"mike_tyson%27s_punch_out": "7 sales per day"})   # Zelda's page is dead
+    previous = pd.DataFrame([{"console": "nes", "game": "old-game", "title": "Old Game", "url": GAME_URL.format("old-game")},
+                             {"console": "snes", "game": "other", "title": "Other", "url": "u"}])
+    games, failures = pricecharting.seed_games(FakeSession(pages), {"nes": choice(top=2)}, today=TODAY, previous=previous)
+    assert failures == []
+    assert games["game"].tolist() == ["old-game"]
+    assert "WARNING nes" in capsys.readouterr().out
+    assert GAME_URL.format("legend-of-zelda") not in json.loads(paths.volumes().read_text())
+
+
+def test_unreadable_volume_page_without_a_previous_selection_uses_page_order(capsys):
+    pages = pages_with_volumes(super_mario_bros_3="9 sales per day", metroid="8 sales per day",
+                               **{"mike_tyson%27s_punch_out": "7 sales per day"})
+    games, _ = pricecharting.seed_games(FakeSession(pages), {"nes": choice(top=2)}, today=TODAY)
+    assert games["game"].tolist() == ["legend-of-zelda", "super-mario-bros-3"]
+    assert "WARNING nes" in capsys.readouterr().out
 
 
 def test_second_seed_reads_volumes_from_the_cache():
@@ -108,7 +128,7 @@ def test_cache_is_saved_even_when_a_later_console_fails():
 
 
 def test_seed_applies_the_consoles_price_floor():
-    # Only Zelda ($150) and Tyson ($1250.50) clear $100; Tyson trades more often.
-    pages = pages_with_volumes(legend_of_zelda="1 sale per day", **{"mike_tyson%27s_punch_out": "3 sales per day"})
+    pages = pages_with_volumes(legend_of_zelda="1 sale per day", metroid="2 sales per day",
+                               **{"mike_tyson%27s_punch_out": "3 sales per day"})
     pricecharting.seed(consoles={"nes": choice(top=1, min_price=100)}, session=FakeSession(pages))
     assert pd.read_csv(paths.games())["game"].tolist() == ["mike-tyson%27s-punch-out"]

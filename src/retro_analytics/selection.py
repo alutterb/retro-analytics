@@ -23,6 +23,10 @@ DAYS_PER_UNIT = {'day': 1, 'week': 7, 'month': 30, 'year': 365}
 VOLUME = re.compile(r'(\d[\d,]*)\s+sales?\s+per\s+(day|week|month|year)', re.IGNORECASE)
 
 
+class VolumeReadError(Exception):
+    """Some candidate's volume could not be read, so a ranking would be unreliable."""
+
+
 def parse_cib_volume(html):
     """CIB sales per day from a game page ('5 sales per week' -> 0.714), or None if it shows none."""
     cell = BeautifulSoup(html, 'html.parser').select_one('tr.sales_volume td[data-show-tab="completed-auctions-cib"]')
@@ -53,10 +57,11 @@ def rank_by_volume(rows, top, session, cache, today=None):
     """The `top` rows with the most CIB sales per day; page order breaks ties.
 
     `cache` ({url: {'per_day', 'date'}}) is read and updated in place. A game whose page
-    cannot be read, or shows no CIB volume, counts as 0 and so ranks last.
+    shows no CIB volume counts as 0 and so ranks last. If any page cannot be read, the reads
+    that worked are cached and VolumeReadError is raised instead of ranking without it.
     """
     today = today or date.today()
-    volumes = []
+    volumes, unread = [], []
     for row in rows:
         entry = cache.get(row['url'])
         if entry is None:
@@ -65,9 +70,12 @@ def rank_by_volume(rows, top, session, cache, today=None):
                 per_day = parse_cib_volume(session.get(row['url']))
             except requests.RequestException as e:
                 print(f"FAILED {row['url']}: {e}")
+                unread.append(row['url'])
                 volumes.append(0.0)
                 continue
             entry = cache[row['url']] = {'per_day': per_day, 'date': today.isoformat()}
         volumes.append(entry['per_day'] or 0.0)
+    if unread:
+        raise VolumeReadError(f"could not read the volume of {len(unread)} game(s)")
     order = sorted(range(len(rows)), key=lambda i: (-volumes[i], i))
     return [rows[i] for i in order[:top]]

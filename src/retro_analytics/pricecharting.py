@@ -175,11 +175,13 @@ def explicit_games(specs):
     return pd.DataFrame(games, columns=GAME_COLUMNS)
 
 
-def seed_games(session, consoles, today=None):
+def seed_games(session, consoles, today=None, previous=None):
     """Pick games to track from each console page. Returns (games, failures).
 
     `consoles` maps a console slug to its ConsoleSelection. The first `candidates` eligible games
-    on the page are ranked by CIB sales per day and the top `top` kept.
+    on the page are ranked by CIB sales per day and the top `top` kept. If a game's volume cannot
+    be read, that console keeps its rows from `previous` (the old games.csv), or else the first
+    `top` candidates in page order, with a warning.
     """
     today = today or date.today()
     cache = selection.load_cache(today)
@@ -195,7 +197,17 @@ def seed_games(session, consoles, today=None):
                 print(f"FAILED {console}: {e}")
                 continue
             candidates = select_games(rows, choice.candidates, choice.min_price)
-            for row in selection.rank_by_volume(candidates, choice.top, session, cache, today):
+            try:
+                chosen = selection.rank_by_volume(candidates, choice.top, session, cache, today)
+            except selection.VolumeReadError as e:
+                kept = previous[previous['console'] == console] if previous is not None else None
+                if kept is not None and len(kept):
+                    print(f"WARNING {console}: {e}; keeping its previous {len(kept)} games")
+                    games.extend(kept[GAME_COLUMNS].to_dict('records'))
+                    continue
+                print(f"WARNING {console}: {e}; using page order instead of trade volume")
+                chosen = candidates[:choice.top]
+            for row in chosen:
                 games.append({'console': console, 'game': row['game'], 'title': row['title'], 'url': row['url']})
     finally:
         selection.save_cache(cache)
@@ -254,7 +266,8 @@ def seed(consoles=None, games=None, session=None):
     if games:
         selected, failures = explicit_games(games), []
     else:
-        selected, failures = seed_games(session or PoliteSession(), consoles)
+        previous = pd.read_csv(paths.games()) if paths.games().exists() else None
+        selected, failures = seed_games(session or PoliteSession(), consoles, previous=previous)
     if failures and paths.games().exists():
         failed = {console for console, _ in failures}
         previous = pd.read_csv(paths.games())
