@@ -48,6 +48,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val state: StateFlow<UiState>
     private var refreshJob: Job? = null
 
+    /** Survives rotation and the list leaving composition; not in [UiState] so scrolling never recomposes. */
+    val scrollMemory = ScrollMemory()
+
     init {
         val hasToken = repository.hasToken
         _state = MutableStateFlow(
@@ -83,8 +86,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openTab(direction: Direction) = _state.update { it.copy(tab = direction, screen = Screen.LIST) }
-    fun filterConsole(console: String?) = _state.update { it.copy(console = console) }
-    fun sortBy(sort: SortOrder) = _state.update { it.copy(sort = sort) }
+    fun filterConsole(console: String?) {
+        scrollMemory.clear()
+        _state.update { it.copy(console = console) }
+    }
+
+    fun sortBy(sort: SortOrder) {
+        scrollMemory.clear()
+        _state.update { it.copy(sort = sort) }
+    }
+
     fun open(key: String) = _state.update { it.copy(selected = key, screen = Screen.DETAIL) }
     fun back() = _state.update { it.copy(screen = Screen.LIST) }
 

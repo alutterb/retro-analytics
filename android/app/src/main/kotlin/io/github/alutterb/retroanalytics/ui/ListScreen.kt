@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -28,10 +29,14 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -67,13 +72,25 @@ fun ListScreen(state: UiState, model: AppViewModel, modifier: Modifier = Modifie
         val games = remember(results, state.tab, state.console, state.sort) {
             browse(results, state.tab, state.console, state.sort)
         }
+        val currentGames = rememberUpdatedState(games)
         if (games.isEmpty()) {
             Empty(if (state.console == null) "No ${state.tab.label} games" else "No games for this console")
         } else {
-            LazyColumn {
-                items(games, key = { it.key }) { game ->
-                    GameRow(game, state.tab, (game.key to state.tab) in state.newKeys) { model.open(game.key) }
-                    HorizontalDivider()
+            // Fresh state per tab, seeded from the view model, since the list leaves composition on the detail screen.
+            key(state.tab, state.console, state.sort) {
+                val (index, offset) = remember { model.scrollMemory.restore(state.tab, games.map { it.key }) }
+                val listState = rememberLazyListState(index, offset)
+                LaunchedEffect(listState, state.tab) {
+                    snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+                        .collect { (first, scrolled) ->
+                            currentGames.value.getOrNull(first)?.let { model.scrollMemory.save(state.tab, it.key, scrolled) }
+                        }
+                }
+                LazyColumn(state = listState) {
+                    items(games, key = { it.key }) { game ->
+                        GameRow(game, state.tab, (game.key to state.tab) in state.newKeys) { model.open(game.key) }
+                        HorizontalDivider()
+                    }
                 }
             }
         }
