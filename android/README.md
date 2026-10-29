@@ -7,7 +7,8 @@ results file to your private results repository. The phone downloads that
 file and shows it.
 
 - Rising, Crashing and Rebound tabs (rebound: recently crashed, forecast up), a console filter, and sorting by biggest move,
-  price or title.
+  price or title. Each tab remembers its scroll position when you open a game
+  and go back.
 - A detail page per game with the last 24 months of complete-in-box prices,
   the six-month forecast (dashed), the 1-, 3- and 6-month changes and why
   the game was flagged.
