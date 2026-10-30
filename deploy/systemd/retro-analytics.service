@@ -16,4 +16,6 @@ TimeoutStartSec=2h
 # publishing"), uncomment both lines:
 #EnvironmentFile=%h/.config/retro-analytics/env
 #Environment="GIT_SSH_COMMAND=ssh -i %h/.ssh/retro_analytics_data -o IdentitiesOnly=yes"
+# To score underrated games with IGDB (README, "Underrated games"), uncomment:
+#EnvironmentFile=-%h/.config/retro-analytics/igdb.env
 Nice=10
