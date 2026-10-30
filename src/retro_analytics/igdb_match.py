@@ -11,6 +11,7 @@ cutoff below which hand-checked matches were mostly wrong.
 
 import re
 import unicodedata
+from typing import NamedTuple
 
 from rapidfuzz import fuzz
 
@@ -42,33 +43,47 @@ def norm(text):
     return ' '.join(word for word in words if word not in FILLER)
 
 
-def candidates(games):
-    """(normalized name, game, is alternative, is subtitle) for every name of every matchable game."""
-    out = []
-    for game in games:
-        if game.get('game_type') in SKIPPED_TYPES:
-            continue
-        names = [(game['name'], False)] + [
-            (other['name'], True)
-            for field in ('alternative_names', 'game_localizations')
-            for other in game.get(field) or () if other.get('name')
-        ]
-        for name, alternative in names:
-            if normalized := norm(name):
-                out.append((normalized, game, alternative, False))
-            for part in SUBTITLE.split(name)[1:]:
-                if normalized := norm(part):
-                    out.append((normalized, game, alternative, True))
-    return out
-
-
-def _preference(game):
-    return TYPE_PREFERENCE.get(game.get('game_type'), 4), -(game.get('total_rating_count') or 0)
+class Name(NamedTuple):
+    """One candidate name, with what every comparison needs worked out once."""
+    text: str
+    game: dict
+    penalty: int  # 1 for an alternative name, 4 for a subtitle
+    spaceless: str
+    numbers: list
+    sorted_words: str
 
 
 def _numbers(name, console):
     ignored = CONSOLE_NUMBERS.get(console, set())
     return sorted(word for word in name.split() if word.isdigit() and word not in ignored)
+
+
+def _name(text, game, penalty, console):
+    return Name(text, game, penalty, text.replace(' ', ''), _numbers(text, console), ' '.join(sorted(text.split())))
+
+
+def candidates(games, console):
+    """Every name, alternative name, localized name and colon subtitle of the matchable games."""
+    out = []
+    for game in games:
+        if game.get('game_type') in SKIPPED_TYPES:
+            continue
+        names = [(game['name'], 0)] + [
+            (other['name'], 1)
+            for field in ('alternative_names', 'game_localizations')
+            for other in game.get(field) or () if other.get('name')
+        ]
+        for name, alternative in names:
+            if normalized := norm(name):
+                out.append(_name(normalized, game, alternative, console))
+            for part in SUBTITLE.split(name)[1:]:
+                if normalized := norm(part):
+                    out.append(_name(normalized, game, alternative + 4, console))
+    return out
+
+
+def _preference(game):
+    return TYPE_PREFERENCE.get(game.get('game_type'), 4), -(game.get('total_rating_count') or 0)
 
 
 def _queries(title):
@@ -81,30 +96,36 @@ def _queries(title):
     return queries
 
 
-def _score(name, query, console):
-    if name == query:
+def _score(name, query, cutoff):
+    """The match score of candidate `name` for `query` (a Name), or None when it cannot reach `cutoff`."""
+    if name.text == query.text:
         return 100.0
-    if name.replace(' ', '') == query.replace(' ', ''):
+    if name.spaceless == query.spaceless:
         return 99.5
-    if _numbers(name, console) != _numbers(query, console):
+    if name.numbers != query.numbers:
         return None
-    if len(query) >= 5 and (name.startswith(query + ' ') or name.endswith(' ' + query)):
+    if len(query.text) >= 5 and (name.text.startswith(query.text + ' ') or name.text.endswith(' ' + query.text)):
         return 94.0  # a subtitle or a publisher prefix left out
-    if abs(len(name) - len(query)) > 0.5 * max(len(name), len(query)) + 4:
+    if abs(len(name.text) - len(query.text)) > 0.5 * max(len(name.text), len(query.text)) + 4:
         return None
-    return max(fuzz.ratio(name, query), fuzz.token_sort_ratio(name, query))
+    # ratio on sorted words is token_sort_ratio; the cutoff lets rapidfuzz stop early.
+    score = max(fuzz.ratio(name.text, query.text, score_cutoff=cutoff),
+                fuzz.ratio(name.sorted_words, query.sorted_words, score_cutoff=cutoff))
+    return score if score >= cutoff else None
 
 
 def match(title, names, console):
     """(score, IGDB game) for the best match of `title` among `names` (from `candidates`), or None below 90."""
     best = None
-    for penalty, query in enumerate(_queries(title)):
-        for name, game, alternative, subtitle in names:
-            score = _score(name, query, console)
+    for penalty, text in enumerate(_queries(title)):
+        query = _name(text, None, penalty, console)
+        for name in names:
+            # Anything that cannot score 90 after its penalties can never be the accepted match.
+            score = _score(name, query, ACCEPT + name.penalty + penalty - 1e-9)
             if score is None:
                 continue
-            score -= 4 * subtitle + 1 * alternative + penalty
+            score -= name.penalty + penalty
             if best is None or score > best[0] + 1e-9 or (
-                    abs(score - best[0]) < 1e-9 and _preference(game) < _preference(best[1])):
-                best = (score, game)
+                    abs(score - best[0]) < 1e-9 and _preference(name.game) < _preference(best[1])):
+                best = (score, name.game)
     return best if best is not None and best[0] >= ACCEPT else None

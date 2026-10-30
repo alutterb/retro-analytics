@@ -9,7 +9,7 @@ def game(id, name, game_type=0, votes=0, alternatives=()):
 
 
 def best(title, games, console='nes'):
-    found = igdb_match.match(title, igdb_match.candidates(games), console)
+    found = igdb_match.match(title, igdb_match.candidates(games, console), console)
     return found and found[1]['id']
 
 

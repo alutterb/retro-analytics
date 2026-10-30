@@ -58,13 +58,14 @@ class MainActivity : ComponentActivity() {
 private fun App(model: AppViewModel) {
     val state by model.state.collectAsStateWithLifecycle()
     val askPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
-    // A game opened from the Underrated tab shows its underrated page, even when it is also flagged.
-    val selection = state.selected
-    val underrated = remember(state.results, selection) {
-        if (selection?.tab != Tab.UNDERRATED) null else state.results?.underrated?.firstOrNull { it.key == selection.key }
+    // The tab cannot change while a game is open, so it says which list the game came from: a game opened
+    // from the Underrated tab shows its underrated page, even when it is also flagged.
+    val onUnderrated = state.tab == Tab.UNDERRATED
+    val underrated = remember(state.results, state.selected, onUnderrated) {
+        if (onUnderrated) state.results?.underrated?.firstOrNull { it.key == state.selected } else null
     }
-    val flagged = remember(state.results, selection) {
-        if (selection == null || selection.tab == Tab.UNDERRATED) null else state.results?.games?.firstOrNull { it.key == selection.key }
+    val flagged = remember(state.results, state.selected, onUnderrated) {
+        if (onUnderrated) null else state.results?.games?.firstOrNull { it.key == state.selected }
     }
     val screen = if (state.screen == Screen.DETAIL && underrated == null && flagged == null) Screen.LIST else state.screen
     // Settings has no way back until a token is saved.

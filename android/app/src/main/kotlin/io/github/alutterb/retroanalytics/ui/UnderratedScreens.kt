@@ -71,11 +71,6 @@ fun UnderratedDetail(row: Underrated, modifier: Modifier = Modifier) {
     }
 }
 
-@Composable
-private fun Note(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
-
 private fun priceLine(row: Underrated): String {
     val price = row.lastPrice ?: return "${row.console} - no CIB price"
     val month = row.lastMonth?.let { " (${it.take(7)})" } ?: ""

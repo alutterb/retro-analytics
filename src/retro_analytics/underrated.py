@@ -65,8 +65,6 @@ COLUMNS = ['console', 'game', 'title', 'url', 'igdb_id', 'igdb_url', 'rating', '
            'shrunk', 'score', 'rank']
 
 
-# --- Scoring ---------------------------------------------------------------------------------------
-
 def _slope(x, y):
     return float(np.polyfit(x, y, 1)[0]) if len(x) > 1 and x.var() > 0 else 0.0
 
@@ -112,7 +110,9 @@ def score(games):
     return eligible[COLUMNS].reset_index(drop=True)
 
 
-# --- Matching and its cache ------------------------------------------------------------------------
+def _igdb_id(value):
+    return None if pd.isna(value) else int(value)
+
 
 def load_matches():
     path = paths.igdb_matches()
@@ -127,7 +127,7 @@ def load_overrides():
     for path in (PACKAGED_OVERRIDES, paths.igdb_overrides()):
         if path.exists():
             for row in pd.read_csv(path, comment='#', dtype={'igdb_id': 'Int64'}).itertuples(index=False):
-                overrides[(row.console, row.game)] = None if pd.isna(row.igdb_id) else int(row.igdb_id)
+                overrides[(row.console, row.game)] = _igdb_id(row.igdb_id)
     return overrides
 
 
@@ -139,7 +139,7 @@ def match_new(client, games, matches):
     for console, todo in new.groupby('console', sort=False):
         platforms = ', '.join(map(str, PLATFORMS[console]))
         pulled = client.query_all('games', f'fields {MATCH_FIELDS}; where platforms = ({platforms}); sort id asc;')
-        names = igdb_match.candidates(pulled)
+        names = igdb_match.candidates(pulled, console)
         found = 0
         for game in todo.itertuples(index=False):
             hit = igdb_match.match(game.title, names, console)
@@ -182,8 +182,7 @@ def update(client, games):
     matches = match_new(client, games, matches)
 
     overrides = load_overrides()
-    ids = {(m.console, m.game): None if pd.isna(m.igdb_id) else int(m.igdb_id)
-           for m in matches.itertuples(index=False)}
+    ids = {(m.console, m.game): _igdb_id(m.igdb_id) for m in matches.itertuples(index=False)}
     ids.update((key, value) for key, value in overrides.items() if key in ids)
     rated = fetch(client, [i for i in ids.values() if i is not None], RATING_FIELDS)
     # A cached id IGDB no longer returns (merged or removed) is matched afresh next run.

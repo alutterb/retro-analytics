@@ -20,9 +20,6 @@ import kotlinx.coroutines.launch
 
 enum class Screen { LIST, DETAIL, SETTINGS }
 
-/** The game on the detail screen and the tab it was opened from, which decides which page it shows. */
-data class Selection(val key: String, val tab: Tab)
-
 data class UiState(
     val screen: Screen,
     val results: Results? = null,
@@ -32,7 +29,7 @@ data class UiState(
     val tab: Tab = Tab.RISING,
     val console: String? = null,
     val sort: SortOrder = SortOrder.entries.first(),
-    val selected: Selection? = null,
+    val selected: String? = null,
     val settings: SettingsState,
 )
 
@@ -105,13 +102,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { it.copy(sort = sort) }
     }
 
-    fun open(key: String) = _state.update { it.copy(selected = Selection(key, it.tab), screen = Screen.DETAIL) }
-
-    /** From a game, back to the list it was opened from. */
-    fun back() = _state.update {
-        val tab = if (it.screen == Screen.DETAIL) it.selected?.tab ?: it.tab else it.tab
-        it.copy(screen = Screen.LIST, tab = tab)
-    }
+    fun open(key: String) = _state.update { it.copy(selected = key, screen = Screen.DETAIL) }
+    fun back() = _state.update { it.copy(screen = Screen.LIST) }
 
     fun openSettings() {
         resetSettingsForm()

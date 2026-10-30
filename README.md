@@ -270,7 +270,7 @@ last week's scores (or none) with this week's prices.
 **Matching and cost.** Each tracked game is matched once to an IGDB game on
 its console's platforms by title, and the match is cached in
 `data/raw/igdb_matches.csv`. The first run reads every IGDB game on those
-platforms (about 260 requests) and matching takes about six minutes; later runs only match
+platforms (about 260 requests) and takes three to four minutes; later runs only match
 newly tracked games and refresh ratings in about 10 requests, a few seconds at
 IGDB's limit of 4 requests per second. A game with no confident match stays
 unmatched. To correct a match, or to remove a game, add it to

@@ -118,3 +118,10 @@ def test_query_all_pages_until_a_short_page():
         "fields name; where platforms = (18); limit 500; offset 0;",
         "fields name; where platforms = (18); limit 500; offset 500;",
     ]
+
+
+def test_a_network_error_message_never_reaches_the_error():
+    session = FakeSession(*[requests.ConnectionError(f"connection to host with {SECRET} reset")] * 5)
+    with pytest.raises(igdb.IgdbError, match="IGDB games query failed: ConnectionError") as raised:
+        client(session).query("games", "fields name;")
+    assert SECRET not in str(raised.value)
