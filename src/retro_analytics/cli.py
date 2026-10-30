@@ -11,7 +11,7 @@ for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
 from dataclasses import replace
 
 from retro_analytics import (PipelineError, export, forecast, metrics, pipeline, pricecharting, publish, report,
-                             settings, training)
+                             settings, training, underrated)
 
 
 def add_seed_args(parser):
@@ -60,12 +60,14 @@ COMMANDS = {
     "forecast": (lambda args: forecast.main(), "forecast each game's price six months ahead", None),
     "rank": (lambda args: metrics.main(), "rank games by forecast price growth into results.csv", None),
     "report": (lambda args: report.main(), "write the ranking as a static HTML page (report.html)", None),
+    "underrated": (lambda args: underrated.main(),
+                   "score games IGDB players rate above their popularity (needs TWITCH_CLIENT_ID/SECRET)", None),
     "export": (lambda args: export.main(),
                "write the rising and crashing games as JSON for the phone app (latest.json)", None),
     "publish": (lambda args: publish.main(),
                 "commit latest.json to the private results repository set in settings.toml", None),
     "run": (lambda args: pipeline.run(snapshot=args.snapshot, with_sentiment=args.sentiment, games=args.games),
-            "scrape, prep, train, forecast, rank, report, export and publish in one go", add_run_args),
+            "scrape, prep, train, forecast, rank, report, underrated, export and publish in one go", add_run_args),
 }
 
 

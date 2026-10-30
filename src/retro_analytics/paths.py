@@ -59,8 +59,16 @@ def reddit_comments() -> Path:
     return raw("reddit_comments.csv")
 
 
+def igdb_matches() -> Path:
+    return raw("igdb_matches.csv")
+
+
 def settings() -> Path:
     return _ensure(data_dir() / "settings.toml")
+
+
+def igdb_overrides() -> Path:
+    return _ensure(data_dir() / "igdb_overrides.csv")
 
 
 def reddit_credentials() -> Path:
@@ -85,6 +93,10 @@ def forecasts() -> Path:
 
 def results() -> Path:
     return output("results.csv")
+
+
+def underrated() -> Path:
+    return output("underrated.csv")
 
 
 def report() -> Path:

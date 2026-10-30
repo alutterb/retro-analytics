@@ -126,3 +126,48 @@ def test_recent_crash_with_upward_forecast_exports_a_rebound(pipeline_outputs):
 def test_export_summary_counts_rebounds(pipeline_outputs, capsys):
     export.main()
     assert "1 rising, 1 crashing and 0 rebound games" in capsys.readouterr().out
+
+
+def underrated_row(game, rank, console="nes", score=1.5, **extra):
+    return {"console": console, "game": game, "title": game.title(), "url": f"https://pc/{game}",
+            "igdb_id": rank, "igdb_url": f"https://www.igdb.com/games/{game}", "rating": 86.64, "votes": 36,
+            "popularity": 40, "shrunk": 84.0, "score": score, "rank": rank, **extra}
+
+
+def test_without_underrated_scores_the_list_is_empty(pipeline_outputs):
+    export.main()
+    assert read_export()["underrated"] == []
+
+
+def test_underrated_rows_carry_scores_and_this_weeks_price(pipeline_outputs):
+    pd.DataFrame([underrated_row("zelda", 1, score=2.04321), underrated_row("clash", 2)]).to_csv(
+        paths.underrated(), index=False)
+    export.main()
+    zelda, clash = read_export()["underrated"]
+    assert zelda == {"console": "nes", "game": "zelda", "title": "Zelda", "url": "https://pc/zelda",
+                     "igdb_url": "https://www.igdb.com/games/zelda", "score": 2.04, "rank": 1, "rating": 86.6,
+                     "votes": 36, "popularity": 40, "last_price": 100.0, "last_month": "2026-10-01"}
+    # Not ranked this week (too little history): listed without a price.
+    assert clash["last_price"] is None and clash["last_month"] is None
+
+
+def test_underrated_keeps_each_consoles_top_25_of_tracked_games(pipeline_outputs):
+    rows = [underrated_row(f"g{rank}", rank) for rank in range(1, 30)] + [underrated_row("vb", 1, "virtual-boy")]
+    pd.DataFrame(rows).to_csv(paths.underrated(), index=False)
+    pd.DataFrame([{"console": r["console"], "game": r["game"], "title": r["title"], "url": r["url"]}
+                  for r in rows if r["game"] != "g3"]).to_csv(paths.games(), index=False)
+    export.main()
+    listed = [(g["console"], g["game"]) for g in read_export()["underrated"]]
+    assert ("nes", "g25") in listed and ("nes", "g26") not in listed
+    assert ("nes", "g3") not in listed  # no longer tracked
+    assert ("virtual-boy", "vb") in listed
+    assert len(listed) == 25
+
+
+def test_a_non_finite_underrated_row_is_left_out(pipeline_outputs):
+    pd.DataFrame([underrated_row("zelda", 1), underrated_row("clash", 2, score=float("nan"))]).to_csv(
+        paths.underrated(), index=False)
+    export.main()
+    text = paths.export().read_text(encoding="utf-8")
+    assert "NaN" not in text
+    assert [g["game"] for g in json.loads(text)["underrated"]] == ["zelda"]

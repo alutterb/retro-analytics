@@ -1,0 +1,4 @@
+console,game,igdb_id
+# Corrections to automatic IGDB matches; data/igdb_overrides.csv takes precedence. A blank igdb_id means no match.
+psp,final-fantasy,397
+gameboy,bomberman,
