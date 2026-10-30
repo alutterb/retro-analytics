@@ -9,6 +9,10 @@ file and shows it.
 - Rising, Crashing and Rebound tabs (rebound: recently crashed, forecast up), a console filter, and sorting by biggest move,
   price or title. Each tab remembers its scroll position when you open a game
   and go back.
+- An Underrated tab: per console, the games IGDB players rate higher than
+  their popularity predicts, sorted by that score, with each game's rank, vote
+  count and complete-in-box price. Its detail page shows the score, IGDB
+  rating, votes and popularity, with links to PriceCharting and IGDB.
 - A detail page per game with the last 24 months of complete-in-box prices,
   the six-month forecast (dashed), the 1-, 3- and 6-month changes and why
   the game was flagged.

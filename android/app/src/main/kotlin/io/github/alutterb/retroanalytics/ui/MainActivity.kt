@@ -21,7 +21,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.alutterb.retroanalytics.data.Direction
 import io.github.alutterb.retroanalytics.work.Notifier
 import io.github.alutterb.retroanalytics.work.RefreshWorker
 
@@ -50,7 +49,7 @@ class MainActivity : ComponentActivity() {
 
     private fun openTabFrom(intent: Intent?) {
         val tab = intent?.getStringExtra(Notifier.EXTRA_TAB) ?: return
-        Direction.entries.firstOrNull { it.name == tab }?.let(model::openTab)
+        Tab.named(tab)?.let(model::openTab)
     }
 }
 
@@ -59,8 +58,15 @@ class MainActivity : ComponentActivity() {
 private fun App(model: AppViewModel) {
     val state by model.state.collectAsStateWithLifecycle()
     val askPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
-    val selected = remember(state.results, state.selected) { state.results?.games?.firstOrNull { it.key == state.selected } }
-    val screen = if (state.screen == Screen.DETAIL && selected == null) Screen.LIST else state.screen
+    // A game opened from the Underrated tab shows its underrated page, even when it is also flagged.
+    val selection = state.selected
+    val underrated = remember(state.results, selection) {
+        if (selection?.tab != Tab.UNDERRATED) null else state.results?.underrated?.firstOrNull { it.key == selection.key }
+    }
+    val flagged = remember(state.results, selection) {
+        if (selection == null || selection.tab == Tab.UNDERRATED) null else state.results?.games?.firstOrNull { it.key == selection.key }
+    }
+    val screen = if (state.screen == Screen.DETAIL && underrated == null && flagged == null) Screen.LIST else state.screen
     // Settings has no way back until a token is saved.
     val canGoBack = screen != Screen.LIST && (screen != Screen.SETTINGS || state.settings.hasSavedToken)
 
@@ -92,7 +98,7 @@ private fun App(model: AppViewModel) {
         val modifier = Modifier.padding(padding)
         when (screen) {
             Screen.LIST -> ListScreen(state, model, modifier)
-            Screen.DETAIL -> DetailScreen(selected!!, modifier)
+            Screen.DETAIL -> if (underrated != null) UnderratedDetail(underrated, modifier) else DetailScreen(flagged!!, modifier)
             Screen.SETTINGS -> SettingsScreen(state.settings, model, onSaved = {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     askPermission.launch(Manifest.permission.POST_NOTIFICATIONS)

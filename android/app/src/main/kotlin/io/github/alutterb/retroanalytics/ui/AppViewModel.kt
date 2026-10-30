@@ -20,16 +20,19 @@ import kotlinx.coroutines.launch
 
 enum class Screen { LIST, DETAIL, SETTINGS }
 
+/** The game on the detail screen and the tab it was opened from, which decides which page it shows. */
+data class Selection(val key: String, val tab: Tab)
+
 data class UiState(
     val screen: Screen,
     val results: Results? = null,
     val newKeys: Set<Pair<String, Direction>> = emptySet(),
     val loading: Boolean = false,
     val failure: Failure? = null,
-    val tab: Direction = Direction.RISING,
+    val tab: Tab = Tab.RISING,
     val console: String? = null,
     val sort: SortOrder = SortOrder.entries.first(),
-    val selected: String? = null,
+    val selected: Selection? = null,
     val settings: SettingsState,
 )
 
@@ -85,7 +88,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun openTab(direction: Direction) = _state.update { it.copy(tab = direction, screen = Screen.LIST) }
+    fun openTab(tab: Tab) {
+        val current = _state.value
+        val console = consoleOnTab(current.results, tab, current.console)
+        if (console != current.console) scrollMemory.clear()
+        _state.update { it.copy(tab = tab, console = console, screen = Screen.LIST) }
+    }
+
     fun filterConsole(console: String?) {
         scrollMemory.clear()
         _state.update { it.copy(console = console) }
@@ -96,8 +105,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { it.copy(sort = sort) }
     }
 
-    fun open(key: String) = _state.update { it.copy(selected = key, screen = Screen.DETAIL) }
-    fun back() = _state.update { it.copy(screen = Screen.LIST) }
+    fun open(key: String) = _state.update { it.copy(selected = Selection(key, it.tab), screen = Screen.DETAIL) }
+
+    /** From a game, back to the list it was opened from. */
+    fun back() = _state.update {
+        val tab = if (it.screen == Screen.DETAIL) it.selected?.tab ?: it.tab else it.tab
+        it.copy(screen = Screen.LIST, tab = tab)
+    }
 
     fun openSettings() {
         resetSettingsForm()

@@ -15,7 +15,9 @@ const val SUPPORTED_SCHEMA = 1
 /**
  * The weekly results file: only games the PC flagged rising or crashing.
  * A game that recently crashed while its forecast points up also carries a
- * [Game.rebound] flag; files from before that field simply lack it.
+ * [Game.rebound] flag; files from before that field simply lack it. The
+ * [underrated] list is separate from the flagged games and missing from older
+ * files, which then parse with an empty list.
  *
  * Only the fields a screen or rule reads are modelled. Everything else in the
  * file (thresholds, flag signals, horizon) is ignored like any unknown key, so
@@ -27,6 +29,7 @@ data class Results(
     @SerialName("schema_version") val schemaVersion: Int,
     val generated: String,
     val games: List<Game>,
+    val underrated: List<Underrated> = emptyList(),
 )
 
 @Serializable
@@ -48,6 +51,30 @@ data class Game(
 
     /** Every flag the game carries, the rebound included. */
     val allFlags: List<Flag> get() = flags + listOfNotNull(rebound)
+}
+
+/**
+ * A game IGDB players rate higher than its popularity predicts within its
+ * console. [score] is in standard deviations; [popularity] is the raw vote
+ * count including the parent game's. The price is null when the game has no
+ * ranking this week.
+ */
+@Serializable
+data class Underrated(
+    val console: String,
+    val game: String,
+    val title: String,
+    val url: String? = null,
+    @SerialName("igdb_url") val igdbUrl: String? = null,
+    val score: Double,
+    val rank: Int,
+    val rating: Double,
+    val votes: Int,
+    val popularity: Int,
+    @SerialName("last_price") val lastPrice: Double? = null,
+    @SerialName("last_month") val lastMonth: String? = null,
+) {
+    val key: String get() = "$console/$game"
 }
 
 @Serializable

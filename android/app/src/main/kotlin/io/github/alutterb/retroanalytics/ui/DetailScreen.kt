@@ -52,7 +52,7 @@ fun DetailScreen(game: Game, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun Fact(label: String, value: String) {
+fun Fact(label: String, value: String) {
     Row(Modifier.fillMaxWidth()) {
         Text(label, style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.weight(1f))

@@ -2,7 +2,7 @@ package io.github.alutterb.retroanalytics.data
 
 import kotlin.math.abs
 
-/** List orders; the first is the default. */
+/** List orders; the first is the default. On the Underrated tab the first orders by score. */
 enum class SortOrder(val label: String) {
     MOVE("Biggest move"),
     PRICE("Price"),
@@ -29,4 +29,17 @@ fun browse(results: Results, direction: Direction, console: String?, sort: SortO
     return sorted.map { it.first }
 }
 
-fun consoles(results: Results): List<String> = results.games.map { it.console }.distinct().sorted()
+/** Underrated games, optionally on one console, in `sort` order; games without a price sort last by price. */
+fun browseUnderrated(results: Results, console: String?, sort: SortOrder): List<Underrated> {
+    // A repeated key would crash the list, so keep the first row of each game.
+    val rows = results.underrated.filter { console == null || it.console == console }.distinctBy { it.key }
+    return when (sort) {
+        SortOrder.MOVE -> rows.sortedByDescending { it.score }
+        SortOrder.PRICE -> rows.sortedWith(compareBy<Underrated> { it.lastPrice == null }.thenByDescending { it.lastPrice })
+        SortOrder.TITLE -> rows.sortedBy { it.title.lowercase() }
+    }
+}
+
+/** Consoles with a flagged game, or with an underrated game when `underrated`. */
+fun consoles(results: Results, underrated: Boolean = false): List<String> =
+    (if (underrated) results.underrated.map { it.console } else results.games.map { it.console }).distinct().sorted()

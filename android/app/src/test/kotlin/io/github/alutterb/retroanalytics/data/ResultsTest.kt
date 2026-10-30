@@ -2,6 +2,7 @@ package io.github.alutterb.retroanalytics.data
 
 import io.github.alutterb.retroanalytics.data.Fixtures.game
 import io.github.alutterb.retroanalytics.data.Fixtures.results
+import io.github.alutterb.retroanalytics.data.Fixtures.underrated
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -43,6 +44,38 @@ class ResultsTest {
         assertEquals(listOf(Direction.CRASHING, Direction.REBOUND), vmu.allFlags.map { it.direction })
         assertNull(sonic.rebound)
         assertEquals(listOf(Direction.CRASHING), sonic.allFlags.map { it.direction })
+    }
+
+    @Test
+    fun fileWithoutUnderratedListParsesWithAnEmptyOne() {
+        val results = (parseResults(results(game("zelda", flags = listOf("rising" to 15.0)))) as ParseResult.Ok).results
+        assertEquals(listOf("zelda"), results.games.map { it.game })
+        assertEquals(emptyList<Underrated>(), results.underrated)
+    }
+
+    @Test
+    fun underratedRowsParseEveryField() {
+        val text = results(
+            game("zelda"),
+            underrated = listOf(
+                underrated("bomberman", "Bomberman", console = "gameboy", score = 2.37, rank = 1),
+                underrated("windjammers", console = "neo-geo-aes", score = -0.4, rank = 3, price = null),
+            ),
+        )
+        val (bomberman, windjammers) = (parseResults(text) as ParseResult.Ok).results.underrated
+        assertEquals(
+            Underrated(
+                console = "gameboy", game = "bomberman", title = "Bomberman",
+                url = "https://example.com/bomberman", igdbUrl = "https://igdb.example/bomberman",
+                score = 2.37, rank = 1, rating = 86.6, votes = 42, popularity = 120,
+                lastPrice = 30.0, lastMonth = "2026-10-01",
+            ),
+            bomberman,
+        )
+        assertEquals("gameboy/bomberman", bomberman.key)
+        assertEquals(-0.4, windjammers.score, 0.0)
+        assertNull(windjammers.lastPrice)
+        assertNull(windjammers.lastMonth)
     }
 
     @Test

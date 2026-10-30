@@ -28,11 +28,33 @@ object Fixtures {
         """.trimIndent()
     }
 
-    fun results(vararg games: String, version: Int = 1): String = """
-        {"schema_version":$version,"generated":"2026-10-25","horizon_months":6,
-         "thresholds":{"rising":{"forecast_pct":10.0},"crashing":{"forecast_pct":-10.0}},
-         "games":[${games.joinToString(",")}]}
-    """.trimIndent()
+    /** An underrated row; a null `price` also leaves out its month, as for a game with no ranking. */
+    fun underrated(
+        slug: String,
+        title: String = slug,
+        console: String = "nes",
+        score: Double = 1.5,
+        rank: Int = 1,
+        price: Double? = 30.0,
+    ): String {
+        val month = if (price == null) "null" else "\"2026-10-01\""
+        return """
+            {"console":"$console","game":"$slug","title":"$title","url":"https://example.com/$slug",
+             "igdb_url":"https://igdb.example/$slug","score":$score,"rank":$rank,"rating":86.6,
+             "votes":42,"popularity":120,"last_price":$price,"last_month":$month}
+        """.trimIndent()
+    }
 
-    fun parsed(vararg games: String): Results = (parseResults(results(*games)) as ParseResult.Ok).results
+    /** With `underrated` null the key is left out, as in files from before the Underrated tab. */
+    fun results(vararg games: String, version: Int = 1, underrated: List<String>? = null): String {
+        val underratedJson = if (underrated == null) "" else ""","underrated":[${underrated.joinToString(",")}]"""
+        return """
+            {"schema_version":$version,"generated":"2026-10-25","horizon_months":6,
+             "thresholds":{"rising":{"forecast_pct":10.0},"crashing":{"forecast_pct":-10.0}},
+             "games":[${games.joinToString(",")}]$underratedJson}
+        """.trimIndent()
+    }
+
+    fun parsed(vararg games: String, underrated: List<String>? = null): Results =
+        (parseResults(results(*games, underrated = underrated)) as ParseResult.Ok).results
 }

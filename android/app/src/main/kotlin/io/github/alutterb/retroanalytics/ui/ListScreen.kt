@@ -25,7 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
+import androidx.compose.material3.Tab as TabHeader
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,6 +47,7 @@ import io.github.alutterb.retroanalytics.data.Game
 import io.github.alutterb.retroanalytics.data.Results
 import io.github.alutterb.retroanalytics.data.SortOrder
 import io.github.alutterb.retroanalytics.data.browse
+import io.github.alutterb.retroanalytics.data.browseUnderrated
 import io.github.alutterb.retroanalytics.data.consoles
 import io.github.alutterb.retroanalytics.data.headline
 
@@ -60,38 +61,58 @@ fun ListScreen(state: UiState, model: AppViewModel, modifier: Modifier = Modifie
             return@Column
         }
         PrimaryTabRow(selectedTabIndex = state.tab.ordinal) {
-            Direction.entries.forEach { direction ->
-                Tab(
-                    selected = state.tab == direction,
-                    onClick = { model.openTab(direction) },
-                    text = { Text(direction.label.replaceFirstChar { it.uppercase() }) },
-                )
+            Tab.entries.forEach { tab ->
+                TabHeader(selected = state.tab == tab, onClick = { model.openTab(tab) }, text = { Text(tab.label) })
             }
         }
         Controls(results, state, model)
-        val games = remember(results, state.tab, state.console, state.sort) {
-            browse(results, state.tab, state.console, state.sort)
-        }
-        val currentGames = rememberUpdatedState(games)
-        if (games.isEmpty()) {
-            Empty(if (state.console == null) "No ${state.tab.label} games" else "No games for this console")
+        val direction = state.tab.direction
+        if (direction == null) {
+            val rows = remember(results, state.console, state.sort) { browseUnderrated(results, state.console, state.sort) }
+            RememberedList(state, model, rows, { it.key }, "No underrated games yet") { row ->
+                UnderratedRow(row) { model.open(row.key) }
+            }
         } else {
-            // Fresh state per tab, seeded from the view model, since the list leaves composition on the detail screen.
-            key(state.tab, state.console, state.sort) {
-                val (index, offset) = remember { model.scrollMemory.restore(state.tab, games.map { it.key }) }
-                val listState = rememberLazyListState(index, offset)
-                LaunchedEffect(listState, state.tab) {
-                    snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
-                        .collect { (first, scrolled) ->
-                            currentGames.value.getOrNull(first)?.let { model.scrollMemory.save(state.tab, it.key, scrolled) }
-                        }
+            val games = remember(results, direction, state.console, state.sort) {
+                browse(results, direction, state.console, state.sort)
+            }
+            RememberedList(state, model, games, { it.key }, "No ${direction.label} games") { game ->
+                GameRow(game, direction, (game.key to direction) in state.newKeys) { model.open(game.key) }
+            }
+        }
+    }
+}
+
+/** A tab's rows, scrolled back to where that tab was when the list returns from a detail screen. */
+@Composable
+private fun <T> RememberedList(
+    state: UiState,
+    model: AppViewModel,
+    rows: List<T>,
+    keyOf: (T) -> String,
+    emptyText: String,
+    row: @Composable (T) -> Unit,
+) {
+    val keys = remember(rows) { rows.map(keyOf) }
+    val currentKeys = rememberUpdatedState(keys)
+    if (rows.isEmpty()) {
+        Empty(if (state.console == null) emptyText else "No games for this console")
+        return
+    }
+    // Fresh state per tab, seeded from the view model, since the list leaves composition on the detail screen.
+    key(state.tab, state.console, state.sort) {
+        val (index, offset) = remember { model.scrollMemory.restore(state.tab, keys) }
+        val listState = rememberLazyListState(index, offset)
+        LaunchedEffect(listState, state.tab) {
+            snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+                .collect { (first, scrolled) ->
+                    currentKeys.value.getOrNull(first)?.let { model.scrollMemory.save(state.tab, it, scrolled) }
                 }
-                LazyColumn(state = listState) {
-                    items(games, key = { it.key }) { game ->
-                        GameRow(game, state.tab, (game.key to state.tab) in state.newKeys) { model.open(game.key) }
-                        HorizontalDivider()
-                    }
-                }
+        }
+        LazyColumn(state = listState) {
+            items(rows, key = keyOf) { item ->
+                row(item)
+                HorizontalDivider()
             }
         }
     }
@@ -141,7 +162,7 @@ private fun Controls(results: Results, state: UiState, model: AppViewModel) {
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             FilterChip(selected = state.console == null, onClick = { model.filterConsole(null) }, label = { Text("All") })
-            remember(results) { consoles(results) }.forEach { console ->
+            remember(results, state.tab) { consoles(results, underrated = state.tab == Tab.UNDERRATED) }.forEach { console ->
                 FilterChip(
                     selected = state.console == console,
                     onClick = { model.filterConsole(console) },
@@ -150,10 +171,10 @@ private fun Controls(results: Results, state: UiState, model: AppViewModel) {
             }
         }
         Box {
-            TextButton(onClick = { sortOpen = true }) { Text(state.sort.label) }
+            TextButton(onClick = { sortOpen = true }) { Text(state.tab.sortLabel(state.sort)) }
             DropdownMenu(expanded = sortOpen, onDismissRequest = { sortOpen = false }) {
                 SortOrder.entries.forEach { sort ->
-                    DropdownMenuItem(text = { Text(sort.label) }, onClick = { model.sortBy(sort); sortOpen = false })
+                    DropdownMenuItem(text = { Text(state.tab.sortLabel(sort)) }, onClick = { model.sortBy(sort); sortOpen = false })
                 }
             }
         }
