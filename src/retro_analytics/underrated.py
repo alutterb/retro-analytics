@@ -19,14 +19,13 @@ to ``underrated.csv``; without IGDB credentials the stage is skipped and the
 previous file, if any, is kept.
 """
 
-import json
 import re
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from retro_analytics import igdb, igdb_match, paths
+from retro_analytics import PipelineError, igdb, igdb_match, paths, selection
 
 K = 10  # votes' worth of weight on the console median
 MIN_VOTES = 10
@@ -63,6 +62,10 @@ RATING_FIELDS = 'url,rating,rating_count,game_type,parent_game,version_parent'
 MATCH_COLUMNS = ['console', 'game', 'igdb_id', 'match_score']
 COLUMNS = ['console', 'game', 'title', 'url', 'igdb_id', 'igdb_url', 'rating', 'votes', 'popularity',
            'shrunk', 'score', 'rank']
+
+
+class UnderratedError(PipelineError):
+    """An override or cache file the stage reads cannot be parsed; the message names the file."""
 
 
 def _slope(x, y):
@@ -114,11 +117,23 @@ def _igdb_id(value):
     return None if pd.isna(value) else int(value)
 
 
+def _read_ids(path, columns, **kwargs):
+    """A CSV with `columns` and an integer igdb_id column, or UnderratedError naming the file."""
+    try:
+        frame = pd.read_csv(path, dtype={'igdb_id': 'Int64'}, **kwargs)
+    except (OSError, ValueError) as e:  # pandas' parser errors are ValueErrors
+        raise UnderratedError(f"cannot read {path}: {e}") from e
+    missing = [column for column in columns if column not in frame.columns]
+    if missing:
+        raise UnderratedError(f"cannot read {path}: no {', '.join(missing)} column")
+    return frame
+
+
 def load_matches():
     path = paths.igdb_matches()
     if not path.exists():
         return pd.DataFrame(columns=MATCH_COLUMNS)
-    return pd.read_csv(path, dtype={'igdb_id': 'Int64'})
+    return _read_ids(path, MATCH_COLUMNS)
 
 
 def load_overrides():
@@ -126,7 +141,7 @@ def load_overrides():
     overrides = {}
     for path in (PACKAGED_OVERRIDES, paths.igdb_overrides()):
         if path.exists():
-            for row in pd.read_csv(path, comment='#', dtype={'igdb_id': 'Int64'}).itertuples(index=False):
+            for row in _read_ids(path, ['console', 'game', 'igdb_id'], comment='#').itertuples(index=False):
                 overrides[(row.console, row.game)] = _igdb_id(row.igdb_id)
     return overrides
 
@@ -162,14 +177,6 @@ def fetch(client, ids, fields):
     return found
 
 
-def per_day():
-    """{PriceCharting url: CIB sales per day} from the seed's volume cache."""
-    if not paths.volumes().exists():
-        return {}
-    stored = json.loads(paths.volumes().read_text(encoding='utf-8'))
-    return {url: entry.get('per_day') for url, entry in stored.items() if isinstance(entry, dict)}
-
-
 def update(client, games):
     """Match new games, refresh ratings and return the scored list."""
     mapped = games['console'].isin(PLATFORMS)
@@ -192,7 +199,7 @@ def update(client, games):
 
     parent_of = {i: g.get('parent_game') or g.get('version_parent') for i, g in rated.items()}
     parents = fetch(client, [p for p in parent_of.values() if p], 'rating_count')
-    volume = per_day()
+    volume = selection.per_day()
     rows = []
     for game in games.itertuples(index=False):
         entry = rated.get(ids.get((game.console, game.game)))

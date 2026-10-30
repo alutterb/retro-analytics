@@ -43,7 +43,7 @@ def run(snapshot=False, with_sentiment=False, games=None):
     underrated_error = None
     try:
         underrated.main()
-    except igdb.IgdbError as e:
+    except (igdb.IgdbError, underrated.UnderratedError) as e:
         # Export last week's scores, if any, and report the failure after the run.
         print(f"underrated games failed: {e}")
         underrated_error = e

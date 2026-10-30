@@ -144,7 +144,7 @@ Each stage is a `ra` subcommand and reads the files the previous one wrote.
 in order on the games already seeded, price-only. `ra run --sentiment` also runs the sentiment
 stage before ranking, and `ra run --game console/slug` (repeatable) re-seeds
 exactly those games first. If some games fail to scrape it still ranks the rest, then
-exits non-zero; a failed publish or IGDB query likewise leaves the local export in place
+exits non-zero; a failed publish or IGDB query, or an unreadable `data/igdb_overrides.csv`, likewise leaves the local export in place
 and exits non-zero after every other stage has run. Any stage whose input is missing exits non-zero and names the
 stage to run first.
 

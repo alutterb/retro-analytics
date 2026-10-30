@@ -1,5 +1,7 @@
+import json
 import math
 import re
+import zlib
 
 import numpy as np
 import pandas as pd
@@ -10,7 +12,7 @@ from retro_analytics import igdb, paths, pipeline, underrated
 
 def row(game, votes, rating, console='nes', parent_votes=0, game_type=0, igdb_id=None, title=None, per_day=1.0):
     return {'console': console, 'game': game, 'title': title or game, 'url': f'https://pc/{console}/{game}',
-            'igdb_id': igdb_id if igdb_id is not None else hash((console, game)) % 10**6,
+            'igdb_id': igdb_id if igdb_id is not None else zlib.crc32(f'{console}/{game}'.encode()),
             'igdb_url': f'https://igdb/{game}', 'game_type': game_type, 'rating': rating, 'votes': votes,
             'parent_votes': parent_votes, 'per_day': per_day}
 
@@ -74,6 +76,22 @@ def test_small_console_uses_pooled_slope_and_keeps_its_short_list():
     assert list(vb['rank']) == [1, 2, 3]
     # Equal ratings, but the pooled slope says popular games should rate higher: the least voted wins.
     assert list(vb.index) == ['x', 'y', 'z']
+
+
+@pytest.mark.parametrize('size, own_slope', [(19, False), (20, True)])
+def test_consoles_with_20_games_use_their_own_slope(size, own_slope):
+    # 'up' rates popular games higher and 'down' lower, so the pooled slope differs from both.
+    rng = np.random.default_rng(2)
+    x_up, x_down = rng.uniform(0, 5, 30), rng.uniform(0, 5, size)
+    frame = pd.DataFrame({'console': ['up'] * 30 + ['down'] * size, 'x': np.r_[x_up, x_down],
+                          'y': np.r_[2 * x_up, -2 * x_down] + rng.normal(0, 1, 30 + size)})
+    out = underrated.standardized_residuals(frame, 'y', 'x')
+    centered = frame[['x', 'y']] - frame.groupby('console')[['x', 'y']].transform('mean')
+    pooled = np.polyfit(centered['x'], centered['y'], 1)[0]
+    for console, group in frame.groupby('console'):
+        slope = np.polyfit(group['x'], group['y'], 1)[0] if console == 'up' or own_slope else pooled
+        residual = group['y'] - (group['y'].mean() + slope * (group['x'] - group['x'].mean()))
+        assert out[group.index].to_numpy() == pytest.approx((residual / residual.std(ddof=1)).to_numpy())
 
 
 def test_console_with_one_rated_game_scores_zero_not_nan():
@@ -166,6 +184,33 @@ def test_owner_override_beats_packaged_and_blank_removes():
     assert out.loc['star-tropics', 'igdb_id'] == 6
 
 
+@pytest.mark.parametrize('text', ["console,game,igdb_id\npsp,final-fantasy,397x\n",
+                                  "console, game, igdb_id\npsp,final-fantasy,397\n"])
+def test_a_malformed_override_file_is_a_pipeline_error_naming_it(text):
+    paths.igdb_overrides().write_text(text)
+    with pytest.raises(underrated.UnderratedError, match=re.escape(str(paths.igdb_overrides()))):
+        underrated.update(FakeIgdb(), track(*GAMES))
+
+
+def test_a_truncated_match_cache_is_a_pipeline_error_naming_it():
+    paths.igdb_matches().write_text("")
+    with pytest.raises(underrated.UnderratedError, match=re.escape(str(paths.igdb_matches()))):
+        underrated.update(FakeIgdb(), track(*GAMES))
+
+
+def test_the_busier_listing_of_one_igdb_game_wins_even_on_a_stale_volume():
+    games = track(*GAMES[:3])
+    paths.igdb_overrides().write_text("console,game,igdb_id\nnes,legend-of-zelda,3\n")
+    paths.volumes().write_text(json.dumps({'https://www.pricecharting.com/game/nes/star-tropics':
+                                           {'per_day': 2.5, 'date': '2020-01-01'}}))
+    assert set(underrated.update(FakeIgdb(), games)['game']) == {'star-tropics', 'clash-at-demonhead'}
+
+
+def test_a_truncated_volume_cache_is_ignored():
+    paths.volumes().write_text('{"https://www.pricecharting.com/game/nes/star')
+    assert list(underrated.update(FakeIgdb(), track(*GAMES[2:3]))['game']) == ['star-tropics']
+
+
 def test_console_without_platform_is_skipped(capsys):
     out = underrated.update(FakeIgdb(), track(('nes', 'star-tropics', 'Star Tropics'), ('pc-games', 'doom', 'Doom')))
     assert list(out['game']) == ['star-tropics']
@@ -195,7 +240,9 @@ def test_run_without_credentials_still_exports_and_publishes(monkeypatch):
     assert ran[-2:] == ['export', 'publish']
 
 
-def test_run_exports_and_publishes_before_reporting_an_igdb_failure(monkeypatch):
+@pytest.mark.parametrize('error', [igdb.IgdbError("IGDB games query failed: HTTP 503"),
+                                   underrated.UnderratedError("cannot read igdb_overrides.csv: no game column")])
+def test_run_exports_and_publishes_before_reporting_an_underrated_failure(monkeypatch, error):
     ran = []
     for module, name in [(pipeline.pricecharting, 'scrape'), (pipeline.time_series, 'prep'),
                          (pipeline.training, 'train'), (pipeline.forecast, 'forecast'),
@@ -204,9 +251,9 @@ def test_run_exports_and_publishes_before_reporting_an_igdb_failure(monkeypatch)
         monkeypatch.setattr(module, 'main', lambda *a, name=name, **k: ran.append(name))
 
     def broken():
-        raise igdb.IgdbError("IGDB games query failed: HTTP 503")
+        raise error
 
     monkeypatch.setattr(pipeline.underrated, 'main', broken)
-    with pytest.raises(igdb.IgdbError, match="503"):
+    with pytest.raises(type(error), match=re.escape(str(error))):
         pipeline.run()
     assert ran[-2:] == ['export', 'publish']
