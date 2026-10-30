@@ -36,17 +36,27 @@ def parse_cib_volume(html):
     return int(match.group(1).replace(',', '')) / DAYS_PER_UNIT[match.group(2).lower()]
 
 
-def load_cache(today):
-    """Cached {game url: sales per day} that are still fresh."""
+def _stored():
+    """Every cached {game url: entry}; nothing when the file is missing or unreadable."""
     try:
         stored = json.loads(paths.volumes().read_text(encoding='utf-8'))
     except (OSError, ValueError):
         return {}
+    return {url: entry for url, entry in stored.items() if isinstance(entry, dict)}
+
+
+def load_cache(today):
+    """Cached {game url: sales per day} that are still fresh."""
     oldest = (today - timedelta(days=CACHE_DAYS)).isoformat()
     return {
-        url: entry for url, entry in stored.items()
-        if isinstance(entry, dict) and str(entry.get('date', '')) >= oldest and 'per_day' in entry
+        url: entry for url, entry in _stored().items()
+        if str(entry.get('date', '')) >= oldest and 'per_day' in entry
     }
+
+
+def per_day():
+    """{game url: CIB sales per day} for every cached game, however old: enough to tell listings apart."""
+    return {url: entry.get('per_day') for url, entry in _stored().items()}
 
 
 def save_cache(cache):

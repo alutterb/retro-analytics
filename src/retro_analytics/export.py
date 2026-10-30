@@ -6,9 +6,13 @@ forecast points up also carries a ``rebound`` flag shaped like the entries in
 ``flags``; it is a separate field so a reader that predates it still sees only
 rising and crashing flags. Its shape is versioned by ``schema_version``; the
 Android app reads version 1, so later changes add fields or bump the version.
+
+``underrated`` lists, per console, the top games from ``ra underrated`` with
+this week's CIB price; it is empty until IGDB has been queried once.
 """
 
 import json
+import math
 import os
 from datetime import date
 
@@ -18,6 +22,7 @@ from retro_analytics import flags, forecast, paths, report, settings
 
 SCHEMA_VERSION = 1
 HISTORY_MONTHS = report.SPARK_MONTHS
+UNDERRATED_TOP = 25  # games per console
 
 
 def _pct(value):
@@ -28,8 +33,44 @@ def _money(value):
     return round(float(value), 2)
 
 
-def build(results, series, forecasts, thresholds, games=None, generated=None):
-    """The export document for the flagged games, in ranking order."""
+def _text(value):
+    return None if pd.isna(value) else str(value)
+
+
+def underrated_rows(underrated, series, games=None):
+    """Each console's top underrated games still tracked, with the latest CIB price on record."""
+    if underrated is None:
+        return []
+    top = underrated[underrated['rank'] <= UNDERRATED_TOP]
+    if games is not None:
+        tracked = set(zip(games['console'], games['game']))
+        top = top[[key in tracked for key in zip(top['console'], top['game'])]]
+    prices = series.sort_values('month').groupby(['console', 'game']).tail(1).set_index(['console', 'game'])
+    rows = []
+    for u in top.itertuples(index=False):
+        if not all(math.isfinite(float(v)) for v in (u.score, u.rating, u.votes, u.popularity)):
+            continue  # one bad number would make the whole file unreadable
+        key = (u.console, u.game)
+        price = prices.loc[key] if key in prices.index else None
+        rows.append({
+            'console': u.console,
+            'game': u.game,
+            'title': str(u.title),
+            'url': _text(u.url),
+            'igdb_url': _text(u.igdb_url),
+            'score': round(float(u.score), 2),
+            'rank': int(u.rank),
+            'rating': round(float(u.rating), 1),
+            'votes': int(u.votes),
+            'popularity': int(u.popularity),
+            'last_price': None if price is None else _money(price['price']),
+            'last_month': None if price is None else str(price['month']),
+        })
+    return rows
+
+
+def build(results, series, forecasts, thresholds, games=None, generated=None, underrated=None):
+    """The export document for the flagged games, in ranking order, and the underrated games."""
     urls = {}
     if games is not None and 'url' in games:
         urls = {(g.console, g.game): g.url for g in games.itertuples(index=False) if pd.notna(g.url)}
@@ -70,6 +111,7 @@ def build(results, series, forecasts, thresholds, games=None, generated=None):
         'horizon_months': horizon,
         'thresholds': thresholds,
         'games': exported,
+        'underrated': underrated_rows(underrated, series, games),
     }
 
 
@@ -85,10 +127,11 @@ def main():
     series = pd.read_csv(paths.require(paths.series(), "prep"))
     forecasts = pd.read_csv(paths.require(paths.forecasts(), "forecast"))
     games = pd.read_csv(paths.games()) if paths.games().exists() else None
-    document = build(results, series, forecasts, settings.load().thresholds, games)
+    underrated = pd.read_csv(paths.underrated()) if paths.underrated().exists() else None
+    document = build(results, series, forecasts, settings.load().thresholds, games, underrated=underrated)
     write(document, paths.export())
     count = {direction: sum(any(f['direction'] == direction for f in g['flags']) for g in document['games'])
              for direction in ('rising', 'crashing')}
     rebounds = sum(g['rebound'] is not None for g in document['games'])
-    print(f"Flagged {count['rising']} rising, {count['crashing']} crashing and {rebounds} rebound games "
-          f"into {paths.export()}")
+    print(f"Flagged {count['rising']} rising, {count['crashing']} crashing and {rebounds} rebound games, "
+          f"and listed {len(document['underrated'])} underrated games, into {paths.export()}")

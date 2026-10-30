@@ -2,6 +2,7 @@ package io.github.alutterb.retroanalytics.data
 
 import io.github.alutterb.retroanalytics.data.Fixtures.game
 import io.github.alutterb.retroanalytics.data.Fixtures.parsed
+import io.github.alutterb.retroanalytics.data.Fixtures.underrated
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -65,5 +66,41 @@ class BrowseTest {
     @Test
     fun consolesAreListedOnceInOrder() {
         assertEquals(listOf("dreamcast", "gba", "nes", "sega-genesis", "snes"), consoles(results))
+    }
+
+    private val withUnderrated = parsed(
+        game("zelda", console = "nes", flags = listOf("rising" to 12.0)),
+        underrated = listOf(
+            underrated("kirby", "Kirby", console = "nes", score = 1.2, price = 20.0),
+            underrated("gunstar", "Gunstar Heroes", console = "sega-genesis", score = 2.4, price = null),
+            underrated("crystalis", "Crystalis", console = "nes", score = 2.1, price = 45.0),
+            underrated("ristar", "Ristar", console = "sega-genesis", score = -0.3, price = 60.0),
+        ),
+    )
+
+    private fun underratedSlugs(console: String? = null, sort: SortOrder = SortOrder.MOVE) =
+        browseUnderrated(withUnderrated, console, sort).map { it.game }
+
+    @Test
+    fun underratedDefaultsToHighestScoreFirst() {
+        assertEquals(listOf("gunstar", "crystalis", "kirby", "ristar"), underratedSlugs())
+    }
+
+    @Test
+    fun underratedConsoleFilterKeepsOnlyThatConsole() {
+        assertEquals(listOf("crystalis", "kirby"), underratedSlugs(console = "nes"))
+        assertEquals(emptyList<String>(), underratedSlugs(console = "snes"))
+    }
+
+    @Test
+    fun underratedByPriceIsHighestFirstWithMissingPricesLast() {
+        assertEquals(listOf("ristar", "crystalis", "kirby", "gunstar"), underratedSlugs(sort = SortOrder.PRICE))
+        assertEquals(listOf("crystalis", "gunstar", "kirby", "ristar"), underratedSlugs(sort = SortOrder.TITLE))
+    }
+
+    @Test
+    fun underratedConsolesComeFromTheUnderratedList() {
+        assertEquals(listOf("nes"), consoles(withUnderrated))
+        assertEquals(listOf("nes", "sega-genesis"), consoles(withUnderrated, underrated = true))
     }
 }

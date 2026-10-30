@@ -1,6 +1,7 @@
 """Run each pipeline stage in order, from scraping to the published results."""
 
-from retro_analytics import export, forecast, metrics, paths, pricecharting, publish, report, time_series, training
+from retro_analytics import (export, forecast, igdb, metrics, paths, pricecharting, publish, report, time_series,
+                             training, underrated)
 
 
 def prep():
@@ -20,7 +21,7 @@ def sentiment():
 
 
 def run(snapshot=False, with_sentiment=False, games=None):
-    """Scrape, model, rank, report, export and publish. `games` ('console/slug') re-seeds first."""
+    """Scrape, model, rank, report, score underrated games, export, publish. `games` re-seeds first."""
     print("executing update")
     if games:
         pricecharting.seed(games=games)
@@ -39,6 +40,13 @@ def run(snapshot=False, with_sentiment=False, games=None):
     forecast.main()
     metrics.main()
     report.main()
+    underrated_error = None
+    try:
+        underrated.main()
+    except (igdb.IgdbError, underrated.UnderratedError) as e:
+        # Export last week's scores, if any, and report the failure after the run.
+        print(f"underrated games failed: {e}")
+        underrated_error = e
     export.main()
     publish_error = None
     try:
@@ -47,7 +55,7 @@ def run(snapshot=False, with_sentiment=False, games=None):
         # The export is written; report the failure after the run, like a partial scrape.
         print(f"publish failed: {e}")
         publish_error = e
-    error = scrape_error or publish_error
+    error = scrape_error or publish_error or underrated_error
     if error:
         raise error
     print("complete")

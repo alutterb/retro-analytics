@@ -4,8 +4,9 @@ Ranks retro video games by how much their complete-in-box (CIB) price on
 [PriceCharting](https://www.pricecharting.com) is forecast to grow over the
 next six months, and writes the ranking as a single HTML page you open in a
 browser. It also flags which games are rising and which are crashing in price,
-and can publish those to a private GitHub repository for a phone app to read.
-Reddit sentiment is optional and off by default; when collected, it only breaks
+and can publish those to a private GitHub repository for a phone app to read,
+together with a per-console list of [underrated games](#underrated-games):
+those IGDB players rate higher than their popularity predicts. Reddit sentiment is optional and off by default; when collected, it only breaks
 ties.
 
 It is a personal tool: it runs on your machine, keeps all scraped data local,
@@ -55,8 +56,13 @@ It prints where `results.csv`, `report.html` and `latest.json` were written.
   columns `rank, console, game, title, last_month, last_price,
   forecast_month, forecast_price, growth_pct, sentiment, sentiment_texts,
   rebound` (`True` for [rebound](#rebound) games).
+- `data/outputs/underrated.csv`: every tracked game with enough IGDB votes,
+  scored and ranked within its console (see [Underrated games](#underrated-games)),
+  with columns `console, game, title, url, igdb_id, igdb_url, rating, votes,
+  popularity, shrunk, score, rank`.
 - `data/outputs/latest.json`: the games flagged rising or crashing, plus their
-  rebound flag (see [Rising and crashing](#rising-and-crashing)), for the phone app.
+  rebound flag (see [Rising and crashing](#rising-and-crashing)), and each
+  console's top underrated games, for the phone app.
 
 Forecasts are statistical extrapolations of past prices, not advice.
 
@@ -124,16 +130,21 @@ Each stage is a `ra` subcommand and reads the files the previous one wrote.
    Reddit data count as neutral and are never dropped.
 8. `ra report` (`report.py`): writes `data/outputs/report.html` from the
    ranking, the monthly series and the forecasts.
-9. `ra export` (`flags.py`, `export.py`): flags rising and crashing games and
-   writes them to `data/outputs/latest.json`.
-10. `ra publish` (`publish.py`): commits `latest.json` to the private results
+9. `ra underrated` (`underrated.py`, `igdb.py`, `igdb_match.py`): matches
+   newly tracked games to IGDB, refreshes the IGDB ratings of all of them and
+   writes the scored list to `data/outputs/underrated.csv` (see
+   [Underrated games](#underrated-games)). Without IGDB credentials it prints a
+   warning and keeps the previous list.
+10. `ra export` (`flags.py`, `export.py`): flags rising and crashing games and
+    writes them, with the top underrated games, to `data/outputs/latest.json`.
+11. `ra publish` (`publish.py`): commits `latest.json` to the private results
     repository set in `data/settings.toml`; does nothing when none is set.
 
-`ra run` runs scrape, prep, train, forecast, rank, report, export and publish
+`ra run` runs scrape, prep, train, forecast, rank, report, underrated, export and publish
 in order on the games already seeded, price-only. `ra run --sentiment` also runs the sentiment
 stage before ranking, and `ra run --game console/slug` (repeatable) re-seeds
 exactly those games first. If some games fail to scrape it still ranks the rest, then
-exits non-zero; a failed publish likewise leaves the local export in place
+exits non-zero; a failed publish or IGDB query, or an unreadable `data/igdb_overrides.csv`, likewise leaves the local export in place
 and exits non-zero after every other stage has run. Any stage whose input is missing exits non-zero and names the
 stage to run first.
 
@@ -179,7 +190,12 @@ next to the thresholds used and a `schema_version` (currently 1) the app
 checks. A rebound game also has a `rebound` field shaped like a flag
 (`direction: "rebound"`, `value_pct` the forecast growth, `text` such as "down
 25% in 1 month, forecast up 81% in 6 months"), or `null`; `flags` still holds
-only rising and crashing entries, so older readers are unaffected.
+only rising and crashing entries, so older readers are unaffected. A separate
+`underrated` list holds each console's top 25 underrated games still tracked:
+console, title, PriceCharting and IGDB links, `score`, `rank` within the
+console, IGDB `rating`, `votes`, `popularity` and the latest CIB price and
+month (both `null` for a game with no price history). It is empty until
+`ra underrated` has run once.
 
 ### Rebound
 
@@ -198,6 +214,77 @@ forecast_pct = 25   # only crashes forecast to recover by 25% or more
 ```
 
 A settings file without a `[rebound]` table keeps the default.
+
+## Underrated games
+
+`ra underrated` (part of `ra run`) looks for tracked games that players on
+[IGDB](https://www.igdb.com) rate higher than their popularity predicts:
+
+- **Quality** is the IGDB user rating, shrunk toward the console's median
+  rating as if each game had 10 extra votes at the median, so a handful of
+  votes cannot carry a game.
+- **Popularity** is the number of IGDB user votes, plus those of the parent
+  entry for ports, remasters and editions.
+- **Score** is how far a game's quality sits above the line through its
+  console's games (quality against log popularity), in standard deviations of
+  that console. A console with fewer than 20 rated games uses the slope pooled
+  across all consoles.
+
+A game needs at least 10 votes to be listed. Each IGDB game appears once per
+console (the plain listing over variants such as `[Greatest Hits]`), and
+bundles, compilations and hardware are left out. There is no price or
+popularity filter, so rare and expensive games appear too; the vote count and
+price on each row show how much evidence is behind it. Consoles with thin IGDB
+coverage (Virtual Boy, Atari 7800, CD-i, Lynx, 32X, TurboGrafx-16, Jaguar) have
+short lists. IGDB rates a game once across platforms unless it has a separate
+port entry, so a weak port can inherit the original's rating.
+
+**IGDB credentials.** IGDB is free for non-commercial use through a Twitch
+application. Register one at [dev.twitch.tv/console](https://dev.twitch.tv/console)
+(any name, OAuth redirect URL `http://localhost`, client type
+Confidential), create a client secret, and store both where only you can read
+them:
+
+```sh
+mkdir -p ~/.config/retro-analytics
+printf 'TWITCH_CLIENT_ID=%s\nTWITCH_CLIENT_SECRET=%s\n' '<client id>' '<client secret>' \
+  > ~/.config/retro-analytics/igdb.env
+chmod 600 ~/.config/retro-analytics/igdb.env
+```
+
+`ra` reads `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET` from the environment.
+For the weekly timer, add this line to the `[Service]` section of your
+installed `retro-analytics.service` (the template in `deploy/systemd/` has it
+commented out); the leading `-` lets the unit start when the file is missing:
+
+```ini
+EnvironmentFile=-%h/.config/retro-analytics/igdb.env
+```
+
+then run `systemctl --user daemon-reload`. From a shell, load the file first:
+`set -a; . ~/.config/retro-analytics/igdb.env; set +a; uv run ra run`. The
+credentials are sent only to Twitch and IGDB, never printed, and the access
+token is not stored. Without them `ra run` warns, skips the step and exports
+last week's scores (or none) with this week's prices.
+
+**Matching and cost.** Each tracked game is matched once to an IGDB game on
+its console's platforms by title, and the match is cached in
+`data/raw/igdb_matches.csv`. The first run reads every IGDB game on those
+platforms (about 260 requests) and takes three to four minutes; later runs only match
+newly tracked games and refresh ratings in about 10 requests, a few seconds at
+IGDB's limit of 4 requests per second. A game with no confident match stays
+unmatched. To correct a match, or to remove a game, add it to
+`data/igdb_overrides.csv` (a blank id means "no match"):
+
+```csv
+console,game,igdb_id
+psp,final-fantasy,397
+gameboy,bomberman,
+```
+
+`igdb_matches.csv` shows the id each game was matched to. A few known
+mismatches are corrected by default in `src/retro_analytics/igdb_overrides.csv`;
+your file wins over it.
 
 ## Phone export and publishing
 
@@ -303,8 +390,8 @@ points, so it cannot outweigh a real price difference.
 
 ## Android app
 
-`android/` holds a personal Android app that shows the rising and crashing
-games on your phone. It downloads the results file `ra run` publishes to your
+`android/` holds a personal Android app that shows the rising, crashing,
+rebound and underrated games on your phone. It downloads the results file `ra run` publishes to your
 private results repository; see [android/README.md](android/README.md) to
 build it, install it and paste in a read-only token.
 
@@ -334,7 +421,8 @@ local test server. CI runs them on Python 3.12 and 3.13.
   `cli.py` is the `ra` entry point; `pipeline.py` chains the stages; `selection.py` ranks seed candidates by sales volume;
   `report.py` renders the HTML page; `settings.py` reads `settings.toml`;
   `flags.py`, `export.py` and `publish.py` produce and publish the phone
-  export.
+  export; `igdb.py` queries IGDB, `igdb_match.py` matches titles to it and
+  `underrated.py` scores the underrated games.
 - `tests/`: the pytest suite and its HTML fixtures.
 - `examples/`: the three-game end-to-end example.
 - `deploy/systemd/`: the weekly timer.

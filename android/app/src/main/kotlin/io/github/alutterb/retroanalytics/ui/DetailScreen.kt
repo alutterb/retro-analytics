@@ -43,16 +43,17 @@ fun DetailScreen(game: Game, modifier: Modifier = Modifier) {
         game.url?.let { url ->
             OutlinedButton(onClick = { uriHandler.openUri(url) }) { Text("Open on PriceCharting") }
         }
-        Text(
-            "Forecasts are statistical extrapolations of past prices, not advice.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Note("Forecasts are statistical extrapolations of past prices, not advice.")
     }
 }
 
 @Composable
-private fun Fact(label: String, value: String) {
+fun Note(text: String) {
+    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+fun Fact(label: String, value: String) {
     Row(Modifier.fillMaxWidth()) {
         Text(label, style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.weight(1f))

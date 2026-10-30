@@ -26,7 +26,7 @@ data class UiState(
     val newKeys: Set<Pair<String, Direction>> = emptySet(),
     val loading: Boolean = false,
     val failure: Failure? = null,
-    val tab: Direction = Direction.RISING,
+    val tab: Tab = Tab.RISING,
     val console: String? = null,
     val sort: SortOrder = SortOrder.entries.first(),
     val selected: String? = null,
@@ -85,7 +85,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun openTab(direction: Direction) = _state.update { it.copy(tab = direction, screen = Screen.LIST) }
+    fun openTab(tab: Tab) {
+        val current = _state.value
+        val console = consoleOnTab(current.results, tab, current.console)
+        if (console != current.console) scrollMemory.clear()
+        _state.update { it.copy(tab = tab, console = console, screen = Screen.LIST) }
+    }
+
     fun filterConsole(console: String?) {
         scrollMemory.clear()
         _state.update { it.copy(console = console) }
