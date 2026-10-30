@@ -37,15 +37,15 @@ def _text(value):
     return None if pd.isna(value) else str(value)
 
 
-def underrated_rows(underrated, results, games=None):
-    """Each console's top underrated games still tracked, with the latest CIB price where ranked."""
+def underrated_rows(underrated, series, games=None):
+    """Each console's top underrated games still tracked, with the latest CIB price on record."""
     if underrated is None:
         return []
     top = underrated[underrated['rank'] <= UNDERRATED_TOP]
     if games is not None:
         tracked = set(zip(games['console'], games['game']))
         top = top[[key in tracked for key in zip(top['console'], top['game'])]]
-    prices = results.set_index(['console', 'game'])
+    prices = series.sort_values('month').groupby(['console', 'game']).tail(1).set_index(['console', 'game'])
     rows = []
     for u in top.itertuples(index=False):
         if not all(math.isfinite(float(v)) for v in (u.score, u.rating, u.votes, u.popularity)):
@@ -63,8 +63,8 @@ def underrated_rows(underrated, results, games=None):
             'rating': round(float(u.rating), 1),
             'votes': int(u.votes),
             'popularity': int(u.popularity),
-            'last_price': None if price is None else _money(price['last_price']),
-            'last_month': None if price is None else str(price['last_month']),
+            'last_price': None if price is None else _money(price['price']),
+            'last_month': None if price is None else str(price['month']),
         })
     return rows
 
@@ -111,7 +111,7 @@ def build(results, series, forecasts, thresholds, games=None, generated=None, un
         'horizon_months': horizon,
         'thresholds': thresholds,
         'games': exported,
-        'underrated': underrated_rows(underrated, results, games),
+        'underrated': underrated_rows(underrated, series, games),
     }
 
 

@@ -139,7 +139,7 @@ def test_without_underrated_scores_the_list_is_empty(pipeline_outputs):
     assert read_export()["underrated"] == []
 
 
-def test_underrated_rows_carry_scores_and_this_weeks_price(pipeline_outputs):
+def test_underrated_rows_carry_scores_and_latest_price(pipeline_outputs):
     pd.DataFrame([underrated_row("zelda", 1, score=2.04321), underrated_row("clash", 2)]).to_csv(
         paths.underrated(), index=False)
     export.main()
@@ -147,8 +147,17 @@ def test_underrated_rows_carry_scores_and_this_weeks_price(pipeline_outputs):
     assert zelda == {"console": "nes", "game": "zelda", "title": "Zelda", "url": "https://pc/zelda",
                      "igdb_url": "https://www.igdb.com/games/zelda", "score": 2.04, "rank": 1, "rating": 86.6,
                      "votes": 36, "popularity": 40, "last_price": 100.0, "last_month": "2026-10-01"}
-    # Not ranked this week (too little history): listed without a price.
     assert clash["last_price"] is None and clash["last_month"] is None
+
+
+def test_underrated_game_missing_from_results_still_gets_its_latest_price(pipeline_outputs):
+    series = pd.concat([pd.read_csv(paths.series()), monthly("nes", "clash", [40.0, 55.0], end="2026-09-01")],
+                       ignore_index=True)
+    series.to_csv(paths.series(), index=False)
+    pd.DataFrame([underrated_row("clash", 1)]).to_csv(paths.underrated(), index=False)
+    export.main()
+    clash, = read_export()["underrated"]
+    assert clash["last_price"] == 55.0 and clash["last_month"] == "2026-09-01"
 
 
 def test_underrated_keeps_each_consoles_top_25_of_tracked_games(pipeline_outputs):
