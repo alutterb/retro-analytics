@@ -194,7 +194,7 @@ only rising and crashing entries, so older readers are unaffected. A separate
 `underrated` list holds each console's top 25 underrated games still tracked:
 console, title, PriceCharting and IGDB links, `score`, `rank` within the
 console, IGDB `rating`, `votes`, `popularity` and the latest CIB price and
-month (both `null` for a game without a ranking this week). It is empty until
+month (both `null` for a game with no price history). It is empty until
 `ra underrated` has run once.
 
 ### Rebound
